@@ -63,6 +63,7 @@ if [ "$MODE" = run ]; then
 fi
 if [ "$MODE" = install ]; then
     pkill -x Darkslide 2>/dev/null || true
+    for _ in $(seq 1 50); do pgrep -x Darkslide >/dev/null || break; sleep 0.1; done   # else `open` sees it "running" and does nothing
     rm -rf "/Applications/Darkslide.app"
     ditto "$APP" "/Applications/Darkslide.app"
     echo "installed /Applications/Darkslide.app"
