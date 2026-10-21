@@ -43,8 +43,16 @@ struct AppSettings: Codable {
     // Local LLM (Ollama) for caption and keyword suggestions.
     var ollamaURL = "http://localhost:11434"
     var ollamaModel = "qwen3.8:27b-q8_0"
+    var aiProvider: AIProvider = .ollama
+    var aiModels: [String: String] = [:]     // provider → model name override
 
     static let file = AppPaths.support.appendingPathComponent("settings.json")
+
+    func aiModel(for p: AIProvider) -> String {
+        if p == .ollama { return ollamaModel }
+        let m = aiModels[p.rawValue] ?? ""
+        return m.isEmpty ? p.defaultModel : m
+    }
 
     init() {}
 
@@ -82,6 +90,8 @@ struct AppSettings: Codable {
         infoTemplate = get(.infoTemplate, infoTemplate)
         ollamaURL = get(.ollamaURL, ollamaURL)
         ollamaModel = get(.ollamaModel, ollamaModel)
+        aiProvider = get(.aiProvider, aiProvider)
+        aiModels = get(.aiModels, aiModels)
         uploadConnections = get(.uploadConnections, uploadConnections)
         savedSearches = get(.savedSearches, savedSearches)
         favoriteFolders = get(.favoriteFolders, favoriteFolders)

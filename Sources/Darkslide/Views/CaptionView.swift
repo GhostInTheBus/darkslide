@@ -37,8 +37,8 @@ struct CaptionView: View {
                 Button("Variables") { showVariables.toggle() }
                     .popover(isPresented: $showVariables) { VariablesPalette(insert: { _ in }) }
                 Button("Keywords…") { library.showKeywords = true }
-                Button(aiBusy ? "Thinking…" : "Suggest (local AI)") { suggest() }.disabled(aiBusy || library.current == nil)
-                    .help("Caption and keyword suggestions from \(library.settings.ollamaModel) on this Mac. Nothing is written until you save.")
+                Button(aiBusy ? "Thinking…" : "Suggest (\(library.settings.aiProvider == .ollama ? "local AI" : library.settings.aiProvider.label))") { suggest() }.disabled(aiBusy || library.current == nil)
+                    .help(library.settings.aiProvider == .ollama ? "Caption and keyword suggestions from \(library.settings.ollamaModel) on this Mac. Nothing leaves the machine and nothing is written until you save." : "Sends a 1024 px preview of this photo to \(library.settings.aiProvider.label) with your API key. Nothing is written until you save.")
             }
             if !aiError.isEmpty { Text(aiError).font(.caption).foregroundStyle(.red) }
             Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 6) {
@@ -128,7 +128,8 @@ struct CaptionView: View {
         aiBusy = true; aiError = ""
         let m = library.meta[cur.url] ?? PhotoMeta()
         let context = [m.event, m.city, m.state, m.country, m.caption].filter { !$0.isEmpty }.joined(separator: "; ")
-        OllamaClient(baseURL: library.settings.ollamaURL, model: library.settings.ollamaModel).suggest(for: cur.url, context: context) { r in
+        let p = library.settings.aiProvider
+        CaptionAI.suggest(provider: p, model: library.settings.aiModel(for: p), ollamaURL: library.settings.ollamaURL, image: cur.url, context: context) { r in
             aiBusy = false
             switch r {
             case .success(let s):
@@ -137,7 +138,7 @@ struct CaptionView: View {
                 let kws = (template.fields["keywords"] ?? "").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
                 template.fields["keywords"] = (kws + s.keywords.filter { !kws.contains($0) }).joined(separator: ", ")
                 template.apply.formUnion(["caption", "keywords"])
-            case .failure(let e): aiError = "Local AI: \(e.localizedDescription)"
+            case .failure(let e): aiError = "\(library.settings.aiProvider.label): \(e.localizedDescription)"
             }
         }
     }

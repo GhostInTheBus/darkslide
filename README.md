@@ -13,7 +13,7 @@ The classic tools for that job are fast because they never open the full picture
 - **Captions them** with the standard fields newspapers and stock agencies read: who, what, where, copyright, keywords. Save a template once, apply it to a whole shoot.
 - **Knows where you were.** Paste a location, or match the pictures' times against the track your phone recorded and fill in the city automatically.
 - **Hands pictures to your editor** (Affinity, Photoshop, anything) with one key, and when the edited version is saved back, it inherits the caption and stars from the original.
-- **Can draft a caption for you** using an AI model running on the Mac itself. Nothing is uploaded anywhere, and nothing is written until you approve it.
+- **Can draft a caption for you.** Out of the box it uses a model running on your own Mac through Ollama (free, nothing leaves the machine). If you'd rather use a cloud model, paste an API key for Anthropic Claude, xAI Grok or Google Gemini in Preferences; the key stays in your Keychain. Either way nothing is written until you approve it.
 
 Everything it writes into a picture is in the same format the legacy app uses, so the two programs can be used side by side on the same folders, and any other photo software reads the stars and labels too.
 
@@ -30,6 +30,15 @@ brew install --cask ghostinthebus/tap/darkslide
 Or download the zip from the Releases page and drag Darkslide.app to Applications. The app is not notarized: on first launch, right-click it and choose Open.
 
 From source: `./build.sh install` makes an optimised build, copies it to `/Applications/Darkslide.app` and launches it. Settings and templates survive reinstalls; they live in your Library folder, not in the app.
+
+## Caption suggestions (optional)
+
+Preferences › AI. Pick a provider:
+
+- **Ollama (local, free).** Install Ollama from ollama.com, run `ollama pull gemma3:12b` in Terminal (about 8 GB; `gemma3:4b` on small Macs), make sure Ollama is running, press Check. Nothing leaves your Mac.
+- **Anthropic Claude, xAI Grok, Google Gemini.** Paste an API key from the provider's console. Keys are stored in the macOS Keychain. Each suggestion uploads one 1024 px preview and is billed to your account.
+
+Then open any photo's IPTC Info (⌘I) and press Suggest. Review, edit, Save.
 
 ## Keys you'll use
 
