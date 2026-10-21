@@ -151,6 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var keyMonitor: Any?
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppLog.start()
+        _ = Shortcuts.current   // load (and migrate) shortcuts.json now, not on the first keypress
         // Cull and navigation keys work no matter which view has focus (sidebar, grid,
         // preview), as long as nobody is typing in a text field and no sheet is up.
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { e in

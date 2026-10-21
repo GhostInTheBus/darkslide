@@ -602,6 +602,25 @@ final class Library: ObservableObject {
         return c
     }
 
+    /// Read capture info for every item that lacks it, off the main thread, in parallel.
+    /// Rename and export dialogs call this on appear so their live preview does not stall
+    /// the first keystroke (about 9 ms per RAW on the main thread, seconds for a card).
+    func warmInfo(for items: [PhotoItem]) async {
+        let missing = items.filter { infoCache[$0.url] == nil }.map(\.url)
+        guard !missing.isEmpty else { return }
+        let found: [(URL, CaptureInfo)] = await withTaskGroup(of: (URL, CaptureInfo).self) { group in
+            var out: [(URL, CaptureInfo)] = []; out.reserveCapacity(missing.count)
+            var it = missing.makeIterator()
+            for _ in 0..<min(8, missing.count) { if let u = it.next() { group.addTask { (u, ImageLoader.captureInfo(for: u)) } } }
+            while let r = await group.next() {
+                out.append(r)
+                if let u = it.next() { group.addTask { (u, ImageLoader.captureInfo(for: u)) } }
+            }
+            return out
+        }
+        for (u, c) in found where infoCache[u] == nil { infoCache[u] = c }
+    }
+
     // MARK: Culling
 
     func setRating(_ r: Int) { applyCull { $0.rating = r } }

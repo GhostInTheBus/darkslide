@@ -10,6 +10,7 @@ struct RenameView: View {
     @State private var padding = 4
     @State private var saveName = ""
     @State private var showVariables = false
+    @State private var warming = true
 
     private var items: [PhotoItem] { library.targets }
 
@@ -49,7 +50,7 @@ struct RenameView: View {
                 }
             }.font(.callout)
 
-            let p = plan
+            let p = warming ? RenamePlan(entries: []) : plan
             Table(p.entries) {
                 TableColumn("From") { Text($0.from.lastPathComponent) }
                 TableColumn("To") { e in
@@ -58,6 +59,7 @@ struct RenameView: View {
                 TableColumn("") { e in e.collision ? Text(e.from == e.to ? "empty name" : "collision").foregroundStyle(.red) : Text("") }.width(80)
             }
             .frame(minHeight: 220)
+            .overlay { if warming { ProgressView("Reading capture info for \(items.count) files…").controlSize(.small) } }
 
             HStack {
                 if p.collisions > 0 { Text("\(p.collisions) name collision\(p.collisions == 1 ? "" : "s") will be skipped").foregroundStyle(.red) }
@@ -71,7 +73,7 @@ struct RenameView: View {
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(template.isEmpty || items.isEmpty)
+                .disabled(template.isEmpty || items.isEmpty || warming)
             }
         }
         .padding(16)
@@ -81,6 +83,7 @@ struct RenameView: View {
             sequence = library.settings.sequence
             padding = library.settings.sequencePadding
         }
+        .task { await library.warmInfo(for: items); warming = false }
         .sheet(isPresented: $showSave) {
             VStack(spacing: 12) {
                 Text("Save template as").font(.headline)
