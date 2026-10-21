@@ -49,14 +49,16 @@ enum ImageLoader {
         var longSide = 4096
         if let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
            let w = props[kCGImagePropertyPixelWidth] as? Int, let h = props[kCGImagePropertyPixelHeight] as? Int {
-            // Half size is free in the JPEG decoder; but a small preview (Sony's 1616 px
-            // strip, say) is worth more at native size than at half.
-            longSide = max(w, h) >= 3000 ? max(w, h) / 2 : max(w, h)
+            // Half size is free in the JPEG decoder, and a 5616 px Canon strip takes 220 ms
+            // at full size against 40 ms at half. Strips up to ~4500 px (Fuji 4416, Nikon
+            // 4128, Sony 1616) decode at native size in about the same 40 ms, and on a 5K
+            // display the extra pixels show.
+            longSide = max(w, h) > 4500 ? max(w, h) / 2 : max(w, h)
         }
         let opts: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageIfAbsent: false,
             kCGImageSourceCreateThumbnailFromImageAlways: strip != nil,
-            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceCreateThumbnailWithTransform: strip == nil,   // strips are rotated by `oriented`
             kCGImageSourceThumbnailMaxPixelSize: max(longSide, 1024),
         ]
         guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return nil }

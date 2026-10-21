@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 
 /// Minimal TIFF reader: returns the largest JPEG that a TIFF-based RAW keeps as its
 /// embedded preview. Looks in IFD0, every SubIFD (tag 0x14A) and the IFD chain (IFD1,
@@ -14,6 +15,7 @@ enum TIFFPreview {
         guard let fh = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? fh.close() }
         guard let head = try? fh.read(upToCount: 8), head.count == 8 else { return nil }
+        if head.elementsEqual("FUJIFILM".utf8) { return fujiJPEG(fh) }
         let le: Bool
         switch (head[0], head[1]) {
         case (0x49, 0x49): le = true
@@ -80,6 +82,22 @@ enum TIFFPreview {
 
     /// Width and height from the JPEG's SOF marker; nil unless it is 8-bit baseline,
     /// extended or progressive (what ImageIO decodes). Reads the header in 16 KB steps.
+    /// Fujifilm RAF is not TIFF: a fixed header holds the embedded JPEG's offset and
+    /// length as big-endian 32-bit values at bytes 84 and 88. That JPEG carries its own
+    /// EXIF (with orientation), unlike a TIFF strip, so the orientation comes from it.
+    private static func fujiJPEG(_ fh: FileHandle) -> Strip? {
+        guard let h = try? readAt(fh, 84, 8), h.count == 8 else { return nil }
+        func be32(_ o: Int) -> Int { let b = h.startIndex + o; return Int(h[b]) << 24 | Int(h[b+1]) << 16 | Int(h[b+2]) << 8 | Int(h[b+3]) }
+        let off = be32(0), len = be32(4)
+        guard off >= 92, len >= 4, len < 64 << 20, let data = try? readAt(fh, off, len), data.count == len,
+              data[data.startIndex] == 0xFF, data[data.startIndex + 1] == 0xD8 else { return nil }
+        var orientation = 1
+        if let src = CGImageSourceCreateWithData(data as CFData, nil),
+           let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
+           let o = props[kCGImagePropertyOrientation] as? Int { orientation = o }
+        return Strip(data: data, orientation: orientation)
+    }
+
     private static func sofSize(_ fh: FileHandle, _ c: Candidate) -> (Int, Int)? {
         var buf = Data()
         var i = 2
