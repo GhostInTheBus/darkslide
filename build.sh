@@ -42,7 +42,11 @@ if [ -n "$ET_BIN" ] && [ -f "$ET_BIN" ]; then
     cp "$ET_BIN" "$APP/Contents/Resources/exiftool/exiftool"
     [ -d "$ET_LIB" ] && rsync -a --delete "$ET_LIB/" "$APP/Contents/Resources/exiftool/lib/"
 fi
-codesign --force --sign - "$APP" >/dev/null
+# A local self-signed identity keeps macOS folder permissions (Dropbox, Photos) across
+# rebuilds; ad-hoc signing is a new identity every build. Falls back to ad-hoc.
+IDENTITY="${CODESIGN_IDENTITY:-$(security find-identity -v -p codesigning 2>/dev/null | grep -o '"[^"]*Dev"' | head -1 | tr -d '"')}"
+codesign --force --sign "${IDENTITY:--}" --identifier com.ghostinthebus.darkslide "$APP" >/dev/null
+echo "signed as ${IDENTITY:-ad-hoc}"
 echo "built $APP"
 if [ "$MODE" = run ]; then
     pkill -x Darkslide 2>/dev/null || true
