@@ -62,13 +62,13 @@ final class ExifTool {
 
     private func runLocked(_ args: [String]) -> Result {
         if process == nil || process?.isRunning == false {
-            do { try start() } catch { return Result(output: "", error: "cannot start exiftool: \(error)") }
+            do { try start(); AppLog.info("exiftool started: \(ExifTool.executable)") } catch { AppLog.error("cannot start exiftool: \(error)"); return Result(output: "", error: "cannot start exiftool: \(error)") }
         }
         guard let stdin, let stdout else { return Result(output: "", error: "exiftool not running") }
         var cmd = args.map(ExifTool.argLine).joined(separator: "\n")
         cmd += "\n-execute\n"
         do { try stdin.write(contentsOf: cmd.data(using: .utf8)!) }
-        catch { process = nil; return Result(output: "", error: "exiftool is not responding: \(error.localizedDescription)") }
+        catch { process = nil; AppLog.error("exiftool write failed: \(error.localizedDescription)"); return Result(output: "", error: "exiftool is not responding: \(error.localizedDescription)") }
 
         var out = Data()
         let sentinel = "{ready}\n".data(using: .utf8)!

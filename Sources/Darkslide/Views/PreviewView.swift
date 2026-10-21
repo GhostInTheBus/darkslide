@@ -62,7 +62,7 @@ struct PreviewView: View {
             }
             .contentShape(Rectangle())
         }
-        .background(KeyCatcher(onKey: handleKey))
+        .background(KeyCatcher(onKey: handleKey))   // crop keys and up/down only; cull keys are handled app-wide
         .onAppear(perform: load)
         .onChange(of: library.currentIndex) { _, _ in load() }
         .onChange(of: library.zoomToggle) { _, on in if on { loadFull() } }
@@ -175,6 +175,7 @@ struct PreviewView: View {
     }
 
     private func handleKey(_ event: NSEvent) -> Bool {
+        if Shortcuts.current.action(for: event) != nil && !library.cropMode { return false }   // app-level monitor owns these
         if library.cropMode {
             switch event.keyCode {
             case 36, 76:   // return: save crop
@@ -185,7 +186,6 @@ struct PreviewView: View {
             default: break
             }
         }
-        if library.handle(event) { return true }
         switch event.keyCode {
         case 125: library.step(1); return true      // down
         case 126: library.step(-1); return true     // up

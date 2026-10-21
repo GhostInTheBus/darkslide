@@ -83,7 +83,7 @@ final class MetadataStore {
             }
         }
         // XMP-dc:Creator and dc:Rights mirror for byline/copyright also land in IPTC via MWG.
-        args.append("-XMP-photomech:PMVersion=the legacy app")
+        args.append("-XMP-photomech:PMVersion=PM6")
         args += files.map(\.path)
         ExifTool.shared.runAsync(args, completion: completion)
     }
@@ -170,7 +170,7 @@ final class MetadataStore {
         args.append("-XMP-photomech:Tagged#=\(meta.tagged ? "True" : "False")")
         args.append("-XMP-photomech:Prefs=\(meta.prefsString)")
         args.append("-IPTC:Prefs=\(meta.prefsString)")
-        args.append("-XMP-photomech:PMVersion=the legacy app")
+        args.append("-XMP-photomech:PMVersion=PM6")
         args.append(meta.colorClass == 0 ? "-XMP-xmp:Label=" : "-XMP-xmp:Label=\(label)")
         args += files.map(\.path)
         ExifTool.shared.runAsync(args, completion: completion)

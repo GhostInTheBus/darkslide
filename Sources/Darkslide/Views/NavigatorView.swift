@@ -26,6 +26,8 @@ struct NavigatorView: View {
             }
         }
         .listStyle(.sidebar)
+        .focusable(false)
+        .focusEffectDisabled()
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didMountNotification)) { _ in volumes = NavigatorView.mountedVolumes() }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didUnmountNotification)) { _ in volumes = NavigatorView.mountedVolumes() }
         .onAppear { if let f = library.folder { expandAncestors(of: f) } }
@@ -83,7 +85,11 @@ struct FolderRow: View {
                 .padding(.vertical, 2).padding(.horizontal, 4)
                 .background(current ? Color.accentColor.opacity(0.25) : Color.clear).cornerRadius(4)
                 .contentShape(Rectangle())
-                .onTapGesture { if library.folder != url { library.open(url) } }
+                .onTapGesture {
+                    // Only a real click opens a folder; a keyboard activation of a focused row must not.
+                    guard let t = NSApp.currentEvent?.type, t == .leftMouseUp || t == .leftMouseDown else { return }
+                    if library.folder != url { library.open(url) }
+                }
         }
         .onAppear { if expanded.contains(url) && children == nil { children = FolderRow.subfolders(of: url) } }
     }

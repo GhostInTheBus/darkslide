@@ -88,7 +88,10 @@ struct DarkslideApp: App {
             }
             CommandGroup(replacing: .help) {
                 Button("Keyboard Shortcuts") { library.showHelp = true }.keyboardShortcut("/", modifiers: .command)
+                Button("Check for Updates") { UpdateCheck.check(force: true) { v in library.updateAvailable = v; if v == nil { library.lastError = "Darkslide \(UpdateCheck.currentVersion) is the latest version" } } }
+                Toggle("Check for Updates Daily", isOn: $library.checkForUpdates)
                 Button("Open Settings Folder") { NSWorkspace.shared.open(AppPaths.support) }
+                Button("Show Log") { NSWorkspace.shared.activateFileViewerSelecting([AppLog.file]) }
             }
             CommandMenu("Tools") {
                 Button("Delete Metadata…") { library.showDeleteMetadata = true }
@@ -119,6 +122,8 @@ struct DarkslideApp: App {
                 Toggle("Show Filmstrip in Preview", isOn: $library.showFilmstrip).keyboardShortcut("2", modifiers: [.command, .option])
                 Button("Full Screen") { NSApp.keyWindow?.toggleFullScreen(nil) }
                     .keyboardShortcut("f", modifiers: [.command, .control])
+                Button(library.compareMode ? "Leave Compare" : "Compare Selected") { library.compareMode ? (library.compareMode = false) : library.startCompare() }
+                    .keyboardShortcut("x", modifiers: [])
                 Button(library.showSlideshow ? "Stop Slideshow" : "Slideshow") { library.showSlideshow ? library.stopSlideshow() : library.startSlideshow() }
                     .keyboardShortcut("s", modifiers: [.command, .option])
                 Divider()
@@ -141,11 +146,22 @@ struct DarkslideApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var sigterm: DispatchSourceSignal?
+    private var keyMonitor: Any?
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppLog.start()
+        // Cull and navigation keys work no matter which view has focus (sidebar, grid,
+        // preview), as long as nobody is typing in a text field and no sheet is up.
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { e in
+            guard let lib = Library.shared, let w = e.window, w == NSApp.mainWindow, w.attachedSheet == nil,
+                  !(w.firstResponder is NSTextView), !(w.firstResponder is NSTextField) else { return e }
+            return lib.handle(e) ? nil : e
+        }
         // A killed app must not leave its exiftool child behind.
         signal(SIGTERM, SIG_IGN)
         sigterm = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
-        sigterm?.setEventHandler { ExifTool.shared.shutdown(); NSApp.terminate(nil) }
+        // A SIGTERM must end the process even if a sheet is open; NSApp.terminate can be
+        // cancelled by a modal, which left a zombie instance behind once.
+        sigterm?.setEventHandler { ExifTool.shared.shutdown(); exit(0) }
         sigterm?.resume()
     }
     func applicationWillTerminate(_ notification: Notification) { ExifTool.shared.shutdown() }

@@ -17,7 +17,9 @@ struct ContentView: View {
                     }
                     statusBar
                 }
-                if library.isPreviewing {
+                if library.compareMode {
+                    CompareView()
+                } else if library.isPreviewing {
                     VStack(spacing: 0) {
                         PreviewView()
                         if library.showFilmstrip { FilmstripView() }
@@ -96,6 +98,9 @@ struct ContentView: View {
             Text(library.items.isEmpty ? "No images" : (library.filtersActive ? "\(library.visible.count) of \(library.items.count)" : "\(library.items.count) items"))
             if !library.selection.isEmpty { Text("\(library.selection.count) selected").foregroundStyle(.secondary) }
             if library.metaLoaded < library.items.count { Text("reading metadata \(library.metaLoaded)/\(library.items.count)…").foregroundStyle(.secondary) }
+            if let v = library.updateAvailable {
+                Button("Darkslide \(v) is available") { NSWorkspace.shared.open(UpdateCheck.releasesPage) }.buttonStyle(.link).font(.caption)
+            }
             if let err = library.lastError, !err.isEmpty {
                 Text(err).foregroundStyle(.red).lineLimit(1).help(err)
                     .onTapGesture { library.lastError = nil }

@@ -90,7 +90,8 @@ struct CaptionView: View {
                     library.applyTemplate(template, to: items)
                     library.saveSettings()
                     dismiss()
-                }.keyboardShortcut(.defaultAction).disabled(items.isEmpty || template.apply.isEmpty)
+                }.keyboardShortcut("s", modifiers: .command).disabled(items.isEmpty || template.apply.isEmpty)
+                    .help("Save (⌘S). Return adds a line inside a caption.")
             }
         }
         .padding(16)

@@ -75,7 +75,7 @@ All of these can be changed in a small text file.
 
 Needs Homebrew `exiftool` at build time (it's copied into the bundle) and Xcode or the Command Line Tools. Optional: Ollama with a vision model for caption suggestions.
 
-**Files it keeps**, all plain text, in `~/Library/Application Support/Darkslide/`: `settings.json` (templates, counters, presets), `shortcuts.json`, `user.json`, `code-replacements.txt`, `ingest-logs/`, and `ingested.json`. Quit the app before editing them by hand; it saves on quit.
+**Files it keeps**, all plain text, in `~/Library/Application Support/Darkslide/`: `settings.json` (templates, counters, presets), `shortcuts.json`, `user.json`, `code-replacements.txt`, `ingest-logs/`, `ingested.json`, and `logs/darkslide.log` (errors, exiftool diagnostics, ingest results, crashes; Help › Show Log). Attach that log when reporting a problem. Quit the app before editing them by hand; it saves on quit.
 
 **Layout.** `Sources/Darkslide/Models` holds the state, `Services` the engines (image loading, exiftool, variables, ingest, rename, export, GPS, Ollama), `Views` the SwiftUI screens. `Tests/main.swift` is the engine test suite; `Tools/main.swift` is a command-line ingest.
 

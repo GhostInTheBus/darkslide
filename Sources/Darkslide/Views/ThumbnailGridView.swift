@@ -24,7 +24,7 @@ struct ThumbnailGridView: NSViewRepresentable {
         cv.setDraggingSourceOperationMask(.copy, forLocal: false)
         cv.dataSource = context.coordinator
         cv.delegate = context.coordinator
-        cv.onKey = { [weak library] e in library?.handle(e) ?? false }
+        cv.onKey = { _ in false }   // the app-level monitor handles cull keys before they get here
         cv.onDoubleClick = { [weak library] in if library?.isPreviewing == false { library?.togglePreview() } }
         cv.contextMenuProvider = { [weak library] in
             guard let library else { return nil }
@@ -33,6 +33,7 @@ struct ThumbnailGridView: NSViewRepresentable {
                 let i = MenuItem(title: title, action: #selector(MenuItem.fire), keyEquivalent: ""); i.handler = action; i.target = i; menu.addItem(i)
             }
             add("Preview") { library.togglePreview() }
+            if library.selection.count >= 2 { add("Compare Selected (X)") { library.startCompare() } }
             add("Open in Editor") { library.openInEditor() }
             add("IPTC Info…") { library.showCaption = true }
             add("Rename…") { library.showRename = true }

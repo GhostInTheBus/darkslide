@@ -4,6 +4,7 @@ import SwiftUI
 /// App state: the open folder, its items, the selection, metadata, filters, preview mode.
 @MainActor
 final class Library: ObservableObject {
+    static weak var shared: Library?
     @Published var folder: URL?
     @Published var items: [PhotoItem] = [] { didSet { visibleCache = nil } }          // everything in the folder
     private var visibleCache: [PhotoItem]?
@@ -16,7 +17,7 @@ final class Library: ObservableObject {
     @Published var infoCache: [URL: CaptureInfo] = [:]
     @Published var meta: [URL: PhotoMeta] = [:] { didSet { if filtersActive { visibleCache = nil } } }
     @Published var metaLoaded = 0
-    @Published var lastError: String?
+    @Published var lastError: String? { didSet { if let e = lastError, !e.isEmpty, e != oldValue { AppLog.error(e) } } }
     @Published var colorClasses = ColorClassSet()
     @Published var settings = AppSettings.load()
     @Published var showRename = false
@@ -69,6 +70,9 @@ final class Library: ObservableObject {
     @Published var showUpload = false
     @Published var showCatalog = false
     @Published var showHelp = false
+    @Published var compareMode = false
+    @Published var updateAvailable: String? = nil
+    @Published var checkForUpdates = UserDefaults.standard.object(forKey: "checkForUpdates") as? Bool ?? true { didSet { UserDefaults.standard.set(checkForUpdates, forKey: "checkForUpdates") } }
     @Published var showNavigator = UserDefaults.standard.object(forKey: "showNavigator") as? Bool ?? true { didSet { UserDefaults.standard.set(showNavigator, forKey: "showNavigator") } }
     @Published var showFilmstrip = UserDefaults.standard.object(forKey: "showFilmstrip") as? Bool ?? true { didSet { UserDefaults.standard.set(showFilmstrip, forKey: "showFilmstrip") } }
     @Published var virtualTitle: String? = nil     // set when showing search results instead of a folder
@@ -79,9 +83,21 @@ final class Library: ObservableObject {
     }
 
     init() {
+        Library.shared = self
+        // One-time move of window/folder preferences from the pre-release bundle ids.
+        let d = UserDefaults.standard
+        if d.object(forKey: "prefsMigrated") == nil {
+            for old in ["dev.local.darkslide", "dev.local.picture-mechanic-lite"] {
+                guard let o = UserDefaults(suiteName: old) else { continue }
+                for k in ["lastFolder", "thumbSize", "advanceAfterRating", "sortKey", "sortReversed", "showNavigator", "showFilmstrip", "gpsHomeLat", "gpsHomeLon", "haURL", "haEntity", "cameraZone"] {
+                    if d.object(forKey: k) == nil, let v = o.object(forKey: k) { d.set(v, forKey: k) }
+                }
+            }
+            d.set(true, forKey: "prefsMigrated")
+        }
         let saved = UserDefaults.standard.double(forKey: "thumbSize")
         if saved >= 96 { thumbSize = saved }
-        ExifTool.shared.log = { [weak self] msg in DispatchQueue.main.async { self?.lastError = msg.trimmingCharacters(in: .whitespacesAndNewlines) } }
+        ExifTool.shared.log = { [weak self] msg in AppLog.warn("exiftool: " + msg.trimmingCharacters(in: .whitespacesAndNewlines)); DispatchQueue.main.async { self?.lastError = msg.trimmingCharacters(in: .whitespacesAndNewlines) } }
         if let last = UserDefaults.standard.url(forKey: "lastFolder"), FileManager.default.fileExists(atPath: last.path) {
             open(last)
         }
@@ -89,6 +105,14 @@ final class Library: ObservableObject {
         cardWatcher = CardWatcher()
         cardWatcher?.onCard = { [weak self] _ in self?.showIngest = true }
         folderWatcher.onChange = { [weak self] in self?.rescan() }
+        if checkForUpdates { UpdateCheck.check { [weak self] v in self?.updateAvailable = v } }
+    }
+
+    func startCompare() {
+        let n = visible.filter { selection.contains($0.id) }.count
+        guard n >= 2 else { lastError = "Select 2 to 4 photos to compare"; return }
+        isPreviewing = false; cropMode = false
+        compareMode = true
     }
 
     func resort() {
@@ -286,6 +310,7 @@ final class Library: ObservableObject {
         scanTime = Date().timeIntervalSince(t0)
         folder = url
         virtualTitle = nil
+        AppLog.info("open \(url.path): \(scanned.count) items")
         items = scanned
         selection = []
         currentIndex = scanned.isEmpty ? nil : 0
@@ -769,11 +794,11 @@ final class Library: ObservableObject {
         case .class8: setColorClass(8)
         case .toggleTag: toggleTag()
         case .preview: togglePreview()
-        case .closePreview: if isPreviewing { stopSlideshow(); isPreviewing = false } else { return false }
+        case .closePreview: if compareMode { compareMode = false } else if isPreviewing { stopSlideshow(); isPreviewing = false } else { return false }
         case .next: if isPreviewing { step(1) } else { return false }
         case .previous: if isPreviewing { step(-1) } else { return false }
-        case .first: if isPreviewing { step(-(currentIndex ?? 0)) } else { return false }
-        case .last: if isPreviewing { step(visible.count) } else { return false }
+        case .first: step(-(currentIndex ?? 0))        // Home: first frame, in the grid too
+        case .last: step(visible.count)                // End: last frame
         case .zoom: if isPreviewing { zoomToggle.toggle() } else { return false }
         case .rename: showRename = true
         case .caption: showCaption = true

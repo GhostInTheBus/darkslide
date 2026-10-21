@@ -1,11 +1,12 @@
 #!/bin/bash
-# Usage: ./build.sh [build|run|release|install|test [scratchdir] [cr2dir]]
+# Usage: ./build.sh [build|run|release|install|test [scratchdir] [cr2dir]|smoke <folder>]
 #   install = release build copied to /Applications and launched
 # Builds with SwiftPM (no Xcode needed) and wraps the binary in an .app bundle.
 set -euo pipefail
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 cd "$(dirname "$0")"
 MODE="${1:-build}"
+if [ "$MODE" = smoke ]; then exec Tools/smoke.sh "${2:-}"; fi
 if [ "$MODE" = test ]; then
     mkdir -p build
     S=Sources/Darkslide
@@ -14,16 +15,18 @@ if [ "$MODE" = test ]; then
         $S/Services/Variables.swift $S/Services/RenameEngine.swift $S/Services/IngestEngine.swift \
         $S/Services/ExifTool.swift $S/Services/MetadataStore.swift $S/Services/Shortcuts.swift \
         $S/Services/ImageLoader.swift $S/Services/TIFFPreview.swift $S/Services/GPSTrack.swift \
-        $S/Services/ExportEngine.swift $S/Services/ExportExtras.swift $S/Services/Keywords.swift $S/Services/Uploader.swift $S/Services/Catalog.swift $S/Services/FolderScanner.swift $S/Services/CaptionAI.swift \
+        $S/Services/ExportEngine.swift $S/Services/ExportExtras.swift $S/Services/Keywords.swift $S/Services/Uploader.swift $S/Services/Catalog.swift $S/Services/FolderScanner.swift $S/Services/CaptionAI.swift $S/Services/Log.swift \
         Tests/main.swift -o build/engine_tests
     build/engine_tests "${2:-/tmp/darkslide-engine-test}" "${3:?usage: ./build.sh test <scratch dir> <folder of RAW files to copy from>}"
     exit $?
 fi
 CONFIG=debug
 [ "$MODE" = release ] || [ "$MODE" = install ] && CONFIG=release
-swift build -c "$CONFIG" --arch arm64 2>&1 | grep -v "^\[" || true
+rm -f ".build/$CONFIG/Darkslide"
+swift build -c "$CONFIG" --arch arm64 2>&1 | grep -v "^\["
+[ "${PIPESTATUS[0]}" -eq 0 ] || { echo "BUILD FAILED, nothing installed"; exit 1; }
 BIN=".build/$CONFIG/Darkslide"
-[ -x "$BIN" ] || { echo "build failed"; exit 1; }
+[ -x "$BIN" ] || { echo "build produced no binary"; exit 1; }
 APP="build/Darkslide.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"

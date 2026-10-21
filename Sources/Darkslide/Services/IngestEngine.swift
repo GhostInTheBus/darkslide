@@ -196,6 +196,8 @@ final class IngestEngine {
         }
 
         log.finished = Date()
+        AppLog.info("ingest \(o.sources.map(\.lastPathComponent)) → \(progress.destinationFolder?.path ?? "?"): \(progress.done) copied, \(progress.skipped) skipped, \(progress.failures.count) failed")
+        for f in log.failures { AppLog.error("ingest: \(f)") }
         try? fm.createDirectory(at: IngestEngine.logDir, withIntermediateDirectories: true)
         let name = ISO8601DateFormatter().string(from: log.started).replacingOccurrences(of: ":", with: "-") + ".json"
         let enc = JSONEncoder(); enc.outputFormatting = .prettyPrinted; enc.dateEncodingStrategy = .iso8601

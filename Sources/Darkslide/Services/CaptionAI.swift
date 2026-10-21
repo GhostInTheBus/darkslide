@@ -80,7 +80,7 @@ enum CaptionAI {
                 let (data, status) = try send(req)
                 let reply = try extractText(provider: provider, data: data, status: status)
                 result = .success(try parseSuggestion(reply))
-            } catch { result = .failure(error) }
+            } catch { AppLog.error("caption AI (\(provider.rawValue), \(model)): \(error.localizedDescription)"); result = .failure(error) }
             DispatchQueue.main.async { completion(result) }
         }
     }
