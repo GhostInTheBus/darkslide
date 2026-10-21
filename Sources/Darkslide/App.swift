@@ -115,6 +115,8 @@ struct DarkslideApp: App {
                 Button(library.cropMode ? "Leave Crop Mode" : "Crop") { if library.isPreviewing { library.cropMode.toggle() } else { library.togglePreview(); library.cropMode = true } }
                     .keyboardShortcut("c", modifiers: [])
                 Button("Remove Crop") { library.setCrop(nil) }
+                Toggle("Show Navigator", isOn: $library.showNavigator).keyboardShortcut("1", modifiers: [.command, .option])
+                Toggle("Show Filmstrip in Preview", isOn: $library.showFilmstrip).keyboardShortcut("2", modifiers: [.command, .option])
                 Button("Full Screen") { NSApp.keyWindow?.toggleFullScreen(nil) }
                     .keyboardShortcut("f", modifiers: [.command, .control])
                 Button(library.showSlideshow ? "Stop Slideshow" : "Slideshow") { library.showSlideshow ? library.stopSlideshow() : library.startSlideshow() }

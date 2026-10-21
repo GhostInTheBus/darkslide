@@ -69,6 +69,8 @@ final class Library: ObservableObject {
     @Published var showUpload = false
     @Published var showCatalog = false
     @Published var showHelp = false
+    @Published var showNavigator = UserDefaults.standard.object(forKey: "showNavigator") as? Bool ?? true { didSet { UserDefaults.standard.set(showNavigator, forKey: "showNavigator") } }
+    @Published var showFilmstrip = UserDefaults.standard.object(forKey: "showFilmstrip") as? Bool ?? true { didSet { UserDefaults.standard.set(showFilmstrip, forKey: "showFilmstrip") } }
     @Published var virtualTitle: String? = nil     // set when showing search results instead of a folder
     @Published var slideshowSeconds: Double = 4
     private var slideshowTimer: Timer?

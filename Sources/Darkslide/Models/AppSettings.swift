@@ -32,6 +32,7 @@ struct AppSettings: Codable {
     var colorClasses = ColorClassSet()
     var uploadConnections: [UploadConnection] = []
     var savedSearches: [String: String] = [:]      // name → catalog search text
+    var favoriteFolders: [String] = []
     // Code replacements: \code\ expands to its text in caption fields, like the legacy app.
     var codeReplacementDelimiter = "\\"
     var codeReplacementsEnabled = true
@@ -83,6 +84,7 @@ struct AppSettings: Codable {
         ollamaModel = get(.ollamaModel, ollamaModel)
         uploadConnections = get(.uploadConnections, uploadConnections)
         savedSearches = get(.savedSearches, savedSearches)
+        favoriteFolders = get(.favoriteFolders, favoriteFolders)
     }
 
     static func load() -> AppSettings {

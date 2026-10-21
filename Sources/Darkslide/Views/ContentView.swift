@@ -4,19 +4,26 @@ struct ContentView: View {
     @EnvironmentObject var library: Library
 
     var body: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                if library.folder == nil && library.virtualTitle == nil {
-                    emptyState
-                } else {
-                    FilterBar()
-                    ThumbnailGridView()
+        NavigationSplitView(columnVisibility: Binding(get: { library.showNavigator ? .all : .detailOnly }, set: { library.showNavigator = $0 != .detailOnly })) {
+            NavigatorView().navigationSplitViewColumnWidth(min: 180, ideal: 230, max: 400)
+        } detail: {
+            ZStack {
+                VStack(spacing: 0) {
+                    if library.folder == nil && library.virtualTitle == nil {
+                        emptyState
+                    } else {
+                        FilterBar()
+                        ThumbnailGridView()
+                    }
+                    statusBar
                 }
-                statusBar
-            }
-            if library.isPreviewing {
-                PreviewView()
+                if library.isPreviewing {
+                    VStack(spacing: 0) {
+                        PreviewView()
+                        if library.showFilmstrip { FilmstripView() }
+                    }
                     .transition(.opacity)
+                }
             }
         }
         .toolbar {
