@@ -32,9 +32,17 @@ struct NavigatorView: View {
         .onChange(of: library.folder) { _, f in if let f { expandAncestors(of: f) } }
     }
 
+    /// Expand the path down to the open folder, but stop at a Places root or the home
+    /// folder so the sidebar does not unfold the whole home directory.
     private func expandAncestors(of url: URL) {
+        let roots = Set(NavigatorView.places.map(\.path) + [FileManager.default.homeDirectoryForCurrentUser.path])
+        if roots.contains(url.path) { return }
         var u = url.deletingLastPathComponent()
-        while u.path.count > 1 { expanded.insert(u); u = u.deletingLastPathComponent() }
+        while u.path.count > 1 {
+            expanded.insert(u)
+            if roots.contains(u.path) { break }
+            u = u.deletingLastPathComponent()
+        }
     }
 
     static var places: [URL] {
