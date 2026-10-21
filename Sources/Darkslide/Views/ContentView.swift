@@ -86,9 +86,15 @@ struct ContentView: View {
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            Image(systemName: "photo.on.rectangle.angled").font(.system(size: 56)).foregroundStyle(.secondary)
-            Text("Open a folder or drop one here").foregroundStyle(.secondary)
-            Button("Open Folder…") { library.promptOpenFolder() }.keyboardShortcut("o")
+            if library.isScanning {
+                ProgressView()
+                Text("Reading \(library.folder?.lastPathComponent ?? "folder")…").foregroundStyle(.secondary)
+                Text("If macOS is asking whether Darkslide may access this folder, answer that first.").font(.caption).foregroundStyle(.tertiary)
+            } else {
+                Image(systemName: "photo.on.rectangle.angled").font(.system(size: 56)).foregroundStyle(.secondary)
+                Text("Open a folder or drop one here").foregroundStyle(.secondary)
+                Button("Open Folder…") { library.promptOpenFolder() }.keyboardShortcut("o")
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

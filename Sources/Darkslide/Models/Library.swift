@@ -14,6 +14,7 @@ final class Library: ObservableObject {
     @Published var zoomToggle = false
     @Published var thumbSize: CGFloat = 192 { didSet { UserDefaults.standard.set(thumbSize, forKey: "thumbSize") } }
     @Published var scanTime: TimeInterval = 0
+    @Published var isScanning = false
     @Published var infoCache: [URL: CaptureInfo] = [:]
     @Published var meta: [URL: PhotoMeta] = [:] { didSet { if filtersActive { visibleCache = nil } } }
     @Published var metaLoaded = 0
@@ -303,28 +304,44 @@ final class Library: ObservableObject {
         if panel.runModal() == .OK, let url = panel.url { open(url) }
     }
 
+    private var openGeneration = 0
+
+    /// The directory listing runs off the main thread: on a cloud folder (Dropbox, iCloud)
+    /// the first open() can block until macOS gets an answer to its consent dialog, and
+    /// at launch that used to freeze the app before its window appeared.
     func open(_ url: URL) {
         ThumbnailCache.shared.cancelAll()
-        let t0 = Date()
-        let scanned = FolderScanner.scan(url)
-        scanTime = Date().timeIntervalSince(t0)
+        openGeneration += 1
+        let gen = openGeneration
         folder = url
         virtualTitle = nil
-        AppLog.info("open \(url.path): \(scanned.count) items")
-        items = scanned
+        items = []
         selection = []
-        currentIndex = scanned.isEmpty ? nil : 0
+        currentIndex = nil
         infoCache = [:]
         meta = [:]
         metaLoaded = 0
         isPreviewing = false
-        UserDefaults.standard.set(url, forKey: "lastFolder")
-        folderWatcher.watch(url)
-        MetadataStore.shared.loadAll(scanned) { [weak self] chunk in
-            guard let self else { return }
-            meta.merge(chunk) { _, new in new }
-            metaLoaded += chunk.count
-            if metaLoaded >= items.count && sortKey != .name { resort() }
+        isScanning = true
+        let t0 = Date()
+        DispatchQueue.global(qos: .userInitiated).async {
+            let scanned = FolderScanner.scan(url)
+            DispatchQueue.main.async { [weak self] in
+                guard let self, gen == self.openGeneration else { return }
+                scanTime = Date().timeIntervalSince(t0)
+                isScanning = false
+                AppLog.info("open \(url.path): \(scanned.count) items")
+                items = scanned
+                currentIndex = scanned.isEmpty ? nil : 0
+                UserDefaults.standard.set(url, forKey: "lastFolder")
+                folderWatcher.watch(url)
+                MetadataStore.shared.loadAll(scanned) { [weak self] chunk in
+                    guard let self else { return }
+                    meta.merge(chunk) { _, new in new }
+                    metaLoaded += chunk.count
+                    if metaLoaded >= items.count && sortKey != .name { resort() }
+                }
+            }
         }
     }
 
