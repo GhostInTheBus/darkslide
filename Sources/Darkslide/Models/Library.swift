@@ -478,7 +478,7 @@ final class Library: ObservableObject {
         var n = 0, failed = 0
         for item in ts {
             let dest = (folder ?? item.url.deletingLastPathComponent()).appendingPathComponent(item.url.deletingPathExtension().lastPathComponent + "_preview").appendingPathExtension("jpg")
-            if let strip = TIFFPreview.ifd0JPEG(item.url) {
+            if let strip = TIFFPreview.embeddedJPEG(item.url) {
                 do { try strip.data.write(to: IngestEngine.uniqueDestination(dest)); n += 1 } catch { failed += 1 }
             } else {
                 let r = ExifTool.shared.run(["-b", "-JpgFromRaw", "-w", "%d%f_preview.jpg", item.url.path])

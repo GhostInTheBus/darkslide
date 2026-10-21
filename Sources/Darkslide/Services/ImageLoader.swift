@@ -13,7 +13,7 @@ enum ImageLoader {
         // Fast path: TIFF-based RAW (CR2, NEF, ARW, DNG, PEF, ORF…) keeps a JPEG in IFD0.
         // Pulling those bytes out ourselves and decoding them scaled is about twice as
         // fast as asking ImageIO to find the preview for us.
-        if let strip = TIFFPreview.ifd0JPEG(url),
+        if let strip = TIFFPreview.embeddedJPEG(url),
            let src = CGImageSourceCreateWithData(strip.data as CFData, nil) {
             let opts: [CFString: Any] = [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -39,7 +39,7 @@ enum ImageLoader {
     /// 5616 px Canon file this is ~40 ms versus ~220 ms for the full size.
     static func halfSizePreview(for url: URL) -> CGImage? {
         let src: CGImageSource?
-        let strip = TIFFPreview.ifd0JPEG(url)
+        let strip = TIFFPreview.embeddedJPEG(url)
         if let strip {
             src = CGImageSourceCreateWithData(strip.data as CFData, nil)
         } else {
@@ -49,7 +49,9 @@ enum ImageLoader {
         var longSide = 4096
         if let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
            let w = props[kCGImagePropertyPixelWidth] as? Int, let h = props[kCGImagePropertyPixelHeight] as? Int {
-            longSide = max(w, h) / 2
+            // Half size is free in the JPEG decoder; but a small preview (Sony's 1616 px
+            // strip, say) is worth more at native size than at half.
+            longSide = max(w, h) >= 3000 ? max(w, h) / 2 : max(w, h)
         }
         let opts: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageIfAbsent: false,
@@ -142,8 +144,8 @@ enum ImageLoader {
         if fnum > 0, fnum.isFinite { info.aperture = String(format: "f/%.1f", fnum).replacingOccurrences(of: ".0", with: "") }
         if let isos = exif[kCGImagePropertyExifISOSpeedRatings] as? [Int], let i = isos.first { info.iso = "\(i)" }
         info.lens = (exif[kCGImagePropertyExifLensModel] as? String) ?? (aux[kCGImagePropertyExifAuxLensModel] as? String)
-        info.cameraModel = tiff[kCGImagePropertyTIFFModel] as? String
-        info.cameraMake = tiff[kCGImagePropertyTIFFMake] as? String
+        info.cameraModel = (tiff[kCGImagePropertyTIFFModel] as? String)?.trimmingCharacters(in: .whitespaces)
+        info.cameraMake = (tiff[kCGImagePropertyTIFFMake] as? String)?.trimmingCharacters(in: .whitespaces)
         info.serial = (exif[kCGImagePropertyExifBodySerialNumber] as? String) ?? (aux[kCGImagePropertyExifAuxSerialNumber] as? String)
         if let fl = exif[kCGImagePropertyExifFocalLength] as? Double { info.focalLength = String(format: "%gmm", fl) }
         if let o = props[kCGImagePropertyOrientation] as? Int { info.orientation = o }

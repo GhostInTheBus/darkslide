@@ -180,6 +180,29 @@ let emptyPlan = RenameEngine.plan(items: items, template: "{headline}", context:
 check(emptyPlan.entries.allSatisfy { $0.collision && $0.from == $0.to }, "empty expansion is flagged, nothing moves out of the folder")
 let ap = RenameEngine.apply(emptyPlan); check(ap.moved.isEmpty, "apply moved nothing for empty names")
 check(Catalog.likePrefix("/Photos/2024/Jan") == "/Photos/2024/Jan/%" && Catalog.likePrefix("/a_b%c") == "/a\\_b\\%c/%", "catalog LIKE prefix has trailing slash and escapes wildcards")
+// --- Other makers' RAW formats (optional: a folder of CC0 samples from raw.pixls.us)
+let samples = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Projects/raw-samples")
+if let list = try? fm.contentsOfDirectory(at: samples, includingPropertiesForKeys: nil), !list.isEmpty {
+    print("RAW formats")
+    let rawWork = scratch.appendingPathComponent("raw"); try! fm.createDirectory(at: rawWork, withIntermediateDirectories: true)
+    for f in list.filter({ PhotoItem.rawExtensions.contains($0.pathExtension.lowercased()) }).sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+        let u = rawWork.appendingPathComponent(f.lastPathComponent); try! fm.copyItem(at: f, to: u)
+        let thumb = ImageLoader.embeddedPreview(for: u, maxPixel: 256)
+        let half = ImageLoader.halfSizePreview(for: u)
+        let info = ImageLoader.captureInfo(for: u)
+        let halfW = half.map { max($0.width, $0.height) } ?? 0
+        check(thumb != nil && halfW >= 1500 && info.captureDate != nil && info.cameraModel != nil,
+              "\(u.lastPathComponent): thumb \(thumb == nil ? "nil" : "ok"), preview long side \(halfW), \(info.cameraModel ?? "no model"), \(info.captureDate == nil ? "no date" : "dated")")
+        var m = PhotoMeta(); m.rating = 4; m.colorClass = 3; m.tagged = true
+        let sem = DispatchSemaphore(value: 0)
+        MetadataStore.shared.writeCull(m, label: "Green", to: [u]) { _ in sem.signal() }; sem.wait()
+        MetadataStore.shared.writeFields(["caption": "probe", "city": "Testville"], appendKeywords: false, appendCaption: false, to: [u]) { _ in sem.signal() }; sem.wait()
+        let back = MetadataStore.shared.reload([u])[u]
+        check(back?.rating == 4 && back?.colorClass == 3 && back?.tagged == true && back?.caption == "probe" && back?.city == "Testville" && ImageLoader.embeddedPreview(for: u, maxPixel: 256) != nil,
+              "\(u.lastPathComponent): cull + fields round trip, preview intact after write")
+    }
+}
+
 ExifTool.shared.shutdown()
 print(failures == 0 ? "ALL PASSED" : "\(failures) FAILED")
 exit(failures == 0 ? 0 : 1)

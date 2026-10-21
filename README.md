@@ -19,7 +19,7 @@ Everything it writes into a picture is in the same format the legacy app uses, s
 
 ## Where it stands
 
-The daily workflow (ingest, browse, sort, caption, rename, export) is built and has run a real card through it, and most of the long tail is in too: video, crop, keywords vocabulary, catalog search across folders, GPS from a phone track, FTP upload, HTML galleries, watermarks, printing, slideshow. The full list with what's done is in `CLAUDE.md`. What it needs now is use: a Canon RAW card, a round trip through the legacy app and Affinity, and real jobs.
+The daily workflow (ingest, browse, sort, caption, rename, export) is built and has run a real card through it, and most of the long tail is in too: video, crop, keywords vocabulary, catalog search across folders, GPS from a phone track, FTP upload, HTML galleries, watermarks, printing, slideshow. The full list with what's done is in `CLAUDE.md`. Previews, capture info and metadata writing are checked against sample files from Canon (CR2, CR3), Nikon, Sony, Fujifilm, Olympus, Panasonic, Pentax and iPhone DNG. What it needs now is use: a Canon RAW card, a round trip through the legacy app and Affinity, and real jobs.
 
 ## Install
 
@@ -60,7 +60,7 @@ All of these can be changed in a small text file.
 
 **Stack.** Swift and SwiftUI on macOS 14 and later, Apple Silicon only. The grid is an AppKit `NSCollectionView` because SwiftUI grids stutter past a couple thousand items. Built with Swift Package Manager; no Xcode project.
 
-**Speed.** Thumbnails and previews come from the JPEG embedded in each RAW. For TIFF-based RAW (CR2, NEF, ARW, DNG) the app reads the IFD0 JPEG strip directly, which is about twice as fast as asking ImageIO. On a 5616 px Canon file on an M1 Max: thumbnail about 20 ms, fit-to-window preview about 40 ms (a half-size DCT decode), full-size for 100% zoom about 220 ms, loaded only on demand.
+**Speed.** Thumbnails and previews come from the JPEG embedded in each RAW. For TIFF-based RAW (CR2, NEF, ARW, DNG, PEF) the app finds the largest displayable JPEG itself, searching IFD0, the SubIFDs and the IFD chain, which is faster than asking ImageIO and gets the full-size preview on Nikon and Pentax bodies that ImageIO misses. CR3, RAF, ORF and RW2 go through ImageIO. On a 5616 px Canon file on an M1 Max: thumbnail about 20 ms, fit-to-window preview about 40 ms (a half-size DCT decode), full-size for 100% zoom about 220 ms, loaded only on demand.
 
 **Metadata.** All reads and writes go through one long-lived `exiftool -stay_open` process, bundled inside the app. It writes exactly what the legacy app writes: `xmp:Rating`, `photomechanic:ColorClass`, `photomechanic:Tagged`, `photomechanic:Prefs`, `photomechanic:PMVersion`, the legacy IPTC `Prefs` record, and IPTC fields both through the MWG tags and explicitly as legacy IPTC, embedded in the file rather than in sidecars. It also writes `xmp:Label`, which the legacy app doesn't, so Adobe and Affinity see color labels.
 
