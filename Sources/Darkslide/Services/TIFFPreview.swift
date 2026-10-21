@@ -16,6 +16,7 @@ enum TIFFPreview {
         defer { try? fh.close() }
         guard let head = try? fh.read(upToCount: 8), head.count == 8 else { return nil }
         if head.elementsEqual("FUJIFILM".utf8) { return fujiJPEG(fh) }
+        if head[head.startIndex + 4 ..< head.startIndex + 8].elementsEqual("ftyp".utf8) { return canonCR3JPEG(fh) }
         let le: Bool
         switch (head[0], head[1]) {
         case (0x49, 0x49): le = true
@@ -95,6 +96,68 @@ enum TIFFPreview {
         if let src = CGImageSourceCreateWithData(data as CFData, nil),
            let props = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
            let o = props[kCGImagePropertyOrientation] as? Int { orientation = o }
+        return Strip(data: data, orientation: orientation)
+    }
+
+    /// Canon CR3 is an ISO base media file: `moov` holds four `trak`s and the first one is
+    /// the full-size JPEG, a single sample whose size and offset sit in that track's
+    /// `stsz` and `co64`/`stco`. Orientation is in the CMT1 (IFD0) box inside moov's uuid.
+    private static func canonCR3JPEG(_ fh: FileHandle) -> Strip? {
+        func be32(_ d: Data, _ o: Int) -> Int { let b = d.startIndex + o; return Int(d[b]) << 24 | Int(d[b+1]) << 16 | Int(d[b+2]) << 8 | Int(d[b+3]) }
+        func be64(_ d: Data, _ o: Int) -> Int { be32(d, o) << 32 | be32(d, o + 4) }
+        /// Children of the box body [start, end): (type, bodyStart, bodyEnd).
+        func boxes(_ start: Int, _ end: Int) -> [(String, Int, Int)] {
+            var out: [(String, Int, Int)] = []; var p = start
+            while p + 8 <= end, out.count < 64 {
+                guard let h = try? readAt(fh, p, 16), h.count >= 8 else { break }
+                var size = be32(h, 0), body = p + 8
+                let type = String(decoding: h[h.startIndex + 4 ..< h.startIndex + 8], as: UTF8.self)
+                if size == 1, h.count == 16 { size = be64(h, 8); body = p + 16 }
+                if size == 0 { size = end - p }
+                guard size >= 8, p + size <= end else { break }
+                out.append((type, body, p + size)); p += size
+            }
+            return out
+        }
+        guard let fileSize = try? fh.seekToEnd(), fileSize > 16,
+              let moov = boxes(0, Int(fileSize)).first(where: { $0.0 == "moov" }),
+              let trak = boxes(moov.1, moov.2).first(where: { $0.0 == "trak" }),
+              let mdia = boxes(trak.1, trak.2).first(where: { $0.0 == "mdia" }),
+              let minf = boxes(mdia.1, mdia.2).first(where: { $0.0 == "minf" }),
+              let stbl = boxes(minf.1, minf.2).first(where: { $0.0 == "stbl" }) else { return nil }
+        var off = 0, len = 0
+        for (type, b, e) in boxes(stbl.1, stbl.2) {
+            switch type {
+            case "stsz":
+                guard let d = try? readAt(fh, b, min(16, e - b)), d.count >= 12 else { return nil }
+                len = be32(d, 4); if len == 0, d.count == 16, be32(d, 8) >= 1 { len = be32(d, 12) }   // table of one
+            case "stco":
+                guard let d = try? readAt(fh, b, 12), d.count == 12, be32(d, 4) >= 1 else { return nil }
+                off = be32(d, 8)
+            case "co64":
+                guard let d = try? readAt(fh, b, 16), d.count == 16, be32(d, 4) >= 1 else { return nil }
+                off = be64(d, 8)
+            default: break
+            }
+        }
+        guard off > 0, len >= 4, len < 64 << 20, let data = try? readAt(fh, off, len), data.count == len,
+              data[data.startIndex] == 0xFF, data[data.startIndex + 1] == 0xD8 else { return nil }
+        // Orientation: CMT1 is a TIFF (IFD0) inside moov's uuid box.
+        var orientation = 1
+        if let uuid = boxes(moov.1, moov.2).first(where: { $0.0 == "uuid" }),
+           let cmt1 = boxes(uuid.1 + 16, uuid.2).first(where: { $0.0 == "CMT1" }),
+           let t = try? readAt(fh, cmt1.1, min(cmt1.2 - cmt1.1, 4096)), t.count >= 8 {
+            let le = t[t.startIndex] == 0x49
+            func u16(_ o: Int) -> Int { let b = t.startIndex + o; return le ? Int(t[b]) | Int(t[b+1]) << 8 : Int(t[b]) << 8 | Int(t[b+1]) }
+            func u32(_ o: Int) -> Int { le ? u16(o) | u16(o+2) << 16 : u16(o) << 16 | u16(o+2) }
+            let ifd = u32(4)
+            if ifd + 2 <= t.count {
+                let n = u16(ifd)
+                for i in 0..<n where ifd + 2 + i*12 + 12 <= t.count {
+                    if u16(ifd + 2 + i*12) == 0x112 { orientation = u16(ifd + 2 + i*12 + 8); break }
+                }
+            }
+        }
         return Strip(data: data, orientation: orientation)
     }
 
