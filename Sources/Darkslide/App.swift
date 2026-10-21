@@ -19,7 +19,7 @@ struct DarkslideApp: App {
                     .keyboardShortcut("g", modifiers: .command)
                 Divider()
                 Button("Rename Photos…") { library.showRename = true }
-                    .keyboardShortcut("r", modifiers: .command)
+                    .keyboardShortcut("m", modifiers: .command)
                 Button("IPTC Info…") { library.showCaption = true }
                     .keyboardShortcut("i", modifiers: .command)
                 Button("Adjust Capture Dates and Times…") { library.showAdjustTime = true }
@@ -40,7 +40,7 @@ struct DarkslideApp: App {
                 Button("Export…") { library.showExport = true }
                     .keyboardShortcut("s", modifiers: [.command, .shift])
                 Button("Copy/Move Photos…") { library.showCopyMove = true }
-                    .keyboardShortcut("c", modifiers: [.command, .shift])
+                    .keyboardShortcut("y", modifiers: .command)
                 Button("HTML Gallery…") { library.showHTMLExport = true }
                 Button("Upload (FTP/SFTP)…") { library.showUpload = true }.keyboardShortcut("u", modifiers: .command)
                 Button("Export Video Clip…") { library.showVideoClip = true }
@@ -56,6 +56,8 @@ struct DarkslideApp: App {
                 Divider()
                 Button("Select All") { library.selectAll() }.keyboardShortcut("a", modifiers: .command)
                 Button("Select None") { library.selectNone() }.keyboardShortcut("d", modifiers: .command)
+                Button("Select Tagged") { library.selectTagged() }.keyboardShortcut("t", modifiers: .command)
+                Button("Select Others (invert)") { library.invertSelection() }.keyboardShortcut("o", modifiers: [.command, .shift])
                 Button("Select Similar Rating") { if let c = library.current { library.selectSimilar(rating: library.meta[c.url]?.rating ?? 0) } }
                 Button("Select Similar Color Class") { if let c = library.current { library.selectSimilar(colorClass: library.meta[c.url]?.colorClass ?? 0) } }
                 Button("Select Date Range…") { library.showDateRange = true }
@@ -81,13 +83,13 @@ struct DarkslideApp: App {
                 Divider()
                 Button("Rotate Clockwise") { library.rotate(clockwise: true) }.keyboardShortcut("]", modifiers: .command)
                 Button("Rotate Counterclockwise") { library.rotate(clockwise: false) }.keyboardShortcut("[", modifiers: .command)
-                Button("Mirror Horizontal") { library.mirror(horizontal: true) }
-                Button("Mirror Vertical") { library.mirror(horizontal: false) }
+                Button("Mirror Horizontal") { library.mirror(horizontal: true) }.keyboardShortcut("[", modifiers: [.command, .option])
+                Button("Mirror Vertical") { library.mirror(horizontal: false) }.keyboardShortcut("]", modifiers: [.command, .option])
                 Divider()
                 Button("Remap Ratings and Color Classes…") { library.showRemap = true }
             }
             CommandGroup(replacing: .help) {
-                Button("Keyboard Shortcuts") { library.showHelp = true }.keyboardShortcut("/", modifiers: .command)
+                Button("Keyboard Shortcuts") { library.showHelp = true }.keyboardShortcut("/", modifiers: [.command, .shift])
                 Button("Check for Updates") { UpdateCheck.check(force: true) { v in library.updateAvailable = v; if v == nil { library.lastError = "Darkslide \(UpdateCheck.currentVersion) is the latest version" } } }
                 Toggle("Check for Updates Daily", isOn: $library.checkForUpdates)
                 Button("Open Settings Folder") { NSWorkspace.shared.open(AppPaths.support) }
@@ -106,7 +108,7 @@ struct DarkslideApp: App {
                 }
                 Button("Set GPS to Home") { if let h = library.gpsHome { library.setGPS(latitude: h.0, longitude: h.1) } else { library.lastError = "No GPS home set" } }
                 Divider()
-                Button("Send via Email") { library.share(.composeEmail) }
+                Button("Send via Email") { library.share(.composeEmail) }.keyboardShortcut("e", modifiers: [.command, .shift])
                 Button("Share via AirDrop") { library.share(.sendViaAirDrop) }
                 Button("Share via Messages") { library.share(.composeMessage) }
             }
@@ -125,7 +127,7 @@ struct DarkslideApp: App {
                 Button(library.compareMode ? "Leave Compare" : "Compare Selected") { library.compareMode ? (library.compareMode = false) : library.startCompare() }
                     .keyboardShortcut("x", modifiers: [])
                 Button(library.showSlideshow ? "Stop Slideshow" : "Slideshow") { library.showSlideshow ? library.stopSlideshow() : library.startSlideshow() }
-                    .keyboardShortcut("s", modifiers: [.command, .option])
+                    .keyboardShortcut("l", modifiers: .command)
                 Divider()
                 Picker("Sort By", selection: $library.sortKey) { ForEach(Library.SortKey.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
                 Picker("Then By", selection: $library.secondarySortKey) {
@@ -133,7 +135,7 @@ struct DarkslideApp: App {
                     ForEach(Library.SortKey.allCases, id: \.self) { Text($0.rawValue).tag(Optional($0)) }
                 }
                 Toggle("Reverse Sort", isOn: $library.sortReversed)
-                Button("Rescan Folder") { library.rescan() }.keyboardShortcut("r", modifiers: [.command, .shift])
+                Button("Rescan Folder") { library.rescan() }.keyboardShortcut("/", modifiers: .command)
                 Divider()
                 Button("Larger Thumbnails") { library.thumbSize = min(512, library.thumbSize + 32) }
                     .keyboardShortcut("+", modifiers: .command)

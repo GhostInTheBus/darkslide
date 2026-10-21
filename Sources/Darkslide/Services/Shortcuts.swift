@@ -1,7 +1,8 @@
 import AppKit
 
 /// Remappable keyboard shortcuts, stored as plain JSON in Application Support. Keys are
-/// written like "1", "cmd+1", "shift+t", "space", "left", "esc".
+/// written like "1", "cmd+1", "shift+t", "space", "left", "esc". Several keys for one
+/// action are separated by commas: "space,cmd+r". Defaults follow the legacy app's menus.
 enum ShortcutAction: String, CaseIterable, Codable {
     case rate0, rate1, rate2, rate3, rate4, rate5
     case class0, class1, class2, class3, class4, class5, class6, class7, class8
@@ -16,8 +17,8 @@ struct Shortcuts {
         .rate0: "0", .rate1: "1", .rate2: "2", .rate3: "3", .rate4: "4", .rate5: "5",
         .class0: "cmd+0", .class1: "cmd+1", .class2: "cmd+2", .class3: "cmd+3", .class4: "cmd+4",
         .class5: "cmd+5", .class6: "cmd+6", .class7: "cmd+7", .class8: "cmd+8",
-        .toggleTag: "t", .preview: "space", .closePreview: "esc", .next: "right", .previous: "left",
-        .first: "home", .last: "end", .zoom: "z", .openInEditor: "cmd+e", .rename: "cmd+r", .caption: "cmd+i",
+        .toggleTag: "t", .preview: "space,cmd+r", .closePreview: "esc", .next: "right", .previous: "left",
+        .first: "home", .last: "end", .zoom: "z", .openInEditor: "cmd+e", .rename: "cmd+m", .caption: "cmd+i",
         .rotateCW: "cmd+]", .rotateCCW: "cmd+[",
     ]
 
@@ -28,6 +29,10 @@ struct Shortcuts {
         if let d = try? Data(contentsOf: file),
            let dict = try? JSONDecoder().decode([String: String].self, from: d) {
             for (k, v) in dict { if let a = ShortcutAction(rawValue: k) { s.map[a] = v } }
+            // Files written by 1.0–1.4 pinned the old defaults; move them to the legacy app's keys.
+            if dict["rename"] == "cmd+r", dict["preview"] == "space" {
+                s.map[.rename] = "cmd+m"; s.map[.preview] = "space,cmd+r"; s.save()
+            }
         } else {
             s.save()
         }
@@ -42,7 +47,7 @@ struct Shortcuts {
     /// Which action, if any, this key event triggers.
     func action(for event: NSEvent) -> ShortcutAction? {
         let key = Shortcuts.describe(event)
-        return map.first { $0.value.lowercased() == key }?.key
+        return map.first { $0.value.lowercased().split(separator: ",").contains { $0.trimmingCharacters(in: .whitespaces) == key } }?.key
     }
 
     static func describe(_ e: NSEvent) -> String {

@@ -3,7 +3,7 @@
 Darkslide is a native Apple Silicon photo ingest, culling and captioning app in Swift and SwiftUI, built with SwiftPM (no Xcode project). It works the way the classic ingest tools do: every thumbnail and preview is the JPEG already embedded in the RAW, never a RAW decode, and all metadata is read and written through one long-lived `exiftool -stay_open` process bundled inside the app.
 
 ## Build and test
-`./build.sh run` builds and launches `build/Darkslide.app`; `./build.sh install` makes a release build in /Applications; `./build.sh test <scratch dir> <folder of RAW files>` runs the engine tests (variables, rename, ingest, captions, GPS track, catalog, export). `build.sh` sets `DEVELOPER_DIR` to /Applications/Xcode.app when present. Settings, shortcuts, templates, catalog and ingest logs live in `~/Library/Application Support/Darkslide/` as plain files.
+`./build.sh run` builds and launches `build/Darkslide.app`; `./build.sh install` makes a release build in /Applications; `./build.sh test <scratch dir> <folder of RAW files>` runs the engine tests (variables, rename, ingest, captions, GPS track, catalog, export, and every RAW format when `~/Projects/raw-samples` exists); `./build.sh watch <scratch dir> <folder of RAW files>` runs the folder-watcher test headless (another app writing metadata, files added, renamed, removed, bursts, cache eviction). `build.sh` sets `DEVELOPER_DIR` to /Applications/Xcode.app when present. Settings, shortcuts, templates, catalog and ingest logs live in `~/Library/Application Support/Darkslide/` as plain files.
 
 ## Key decisions
 The speed comes from showing the JPEG preview already embedded in each RAW file, the same trick the legacy app uses.
@@ -89,7 +89,7 @@ Every feature of the classic ingest tools, ticked as it exists here. Items marke
 - [~] FTP/FTPS/SFTP upload exists (⌘U) but is out of scope and untested; decided 2026-10-21 not to spend time on it
 - [x] HTML gallery export, Export video clip (passthrough trim), Watermarking (text, per preset), Set DPI, Convert RAW to DNG (via Adobe DNG Converter if installed), Extract JPEG previews
 - [ ] Embed ICC (not planned; export already converts to sRGB)
-- [x] Print contact sheet (⌘P), Slideshow (⌥⌘S)
+- [x] Print contact sheet (⌘P), Slideshow (⌘L)
 - [x] Print proofs (one per page)
 - [x] Rotate (⌘] ⌘[, EXIF orientation like the legacy app's soft rotation)
 - [x] Mirror, Crop (C in preview, drag, Return; stored as Adobe crs crop and applied on export)

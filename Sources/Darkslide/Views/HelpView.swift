@@ -7,10 +7,10 @@ struct ShortcutsHelpView: View {
         ("Double-click a thumbnail", "Open the preview"),
         ("Double-click the preview, Esc, Space", "Back to the contact sheet"),
         ("Click in the preview", "100% zoom at that point; drag to pan"),
-        ("⌘O", "Open folder"), ("⌘G", "Ingest"), ("⌘R", "Rename"), ("⌘I", "IPTC Info"), ("⌘K", "Structured keywords"),
-        ("⌘E", "Open in editor"), ("⌘⇧S", "Export"), ("⌘⇧C", "Copy / Move"), ("⌘P", "Print contact sheet"),
-        ("⌘F", "Find"), ("⌘⇧F", "Catalog"), ("⌘A / ⌘D", "Select all / none"), ("⌘⌫", "Move to Trash"),
-        ("⌘+ / ⌘-", "Thumbnail size"), ("⌃⌘F", "Full screen"), ("⌥⌘S", "Slideshow"), ("⌘⇧R", "Rescan folder"), ("⌘,", "Preferences"),
+        ("⌘O", "Open folder"), ("⌘G", "Ingest"), ("⌘M", "Rename"), ("⌘I", "IPTC Info"), ("⌘K", "Structured keywords"),
+        ("⌘E", "Open in editor"), ("⌘⇧S", "Export"), ("⌘Y", "Copy / Move"), ("⌘P", "Print contact sheet"), ("⌘⇧E", "Send via email"),
+        ("⌘F", "Find"), ("⌘⇧F", "Catalog"), ("⌘A / ⌘D", "Select all / none"), ("⌘T", "Select tagged"), ("⌘⇧O", "Invert selection"), ("⌘⌫", "Move to Trash"),
+        ("⌥⌘[ / ⌥⌘]", "Mirror"), ("⌘+ / ⌘-", "Thumbnail size"), ("⌃⌘F", "Full screen"), ("⌘L", "Slideshow"), ("⌘/", "Rescan folder"), ("⌘⇧/", "This list"), ("⌘,", "Preferences"),
     ]
     private let names: [ShortcutAction: String] = [
         .rate0: "Clear rating", .rate1: "1 star", .rate2: "2 stars", .rate3: "3 stars", .rate4: "4 stars", .rate5: "5 stars",

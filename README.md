@@ -50,7 +50,7 @@ Then open any photo's IPTC Info (⌘I) and press Suggest. Review, edit, Save.
 | Space or double-click | Open the big preview; arrows move through pictures |
 | Click in the preview, or Z | Zoom to 100% at that spot |
 | ⌘] and ⌘[ | Rotate |
-| ⌘G, ⌘R, ⌘I, ⌘E, ⌘F | Ingest, Rename, Caption, Open in Editor, Find |
+| ⌘G, ⌘M, ⌘I, ⌘E, ⌘F | Ingest, Rename, Caption, Open in Editor, Find (same keys as the legacy app) |
 
 All of these can be changed in a small text file.
 

@@ -9,6 +9,7 @@ struct PhotoItem: Identifiable, Hashable {
     let displayName: String
     var editOf: URL? = nil          // this file is an edited version of that original
     var affinityOnly = false        // an .afphoto exists with no exported TIFF/JPEG beside it
+    var modified: Date? = nil       // so a rescan can tell a file another app rewrote
 
     static let rawExtensions: Set<String> = [
         "cr2", "cr3", "crw", "nef", "nrw", "arw", "srf", "sr2", "raf", "rw2", "orf",

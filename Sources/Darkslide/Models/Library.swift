@@ -147,6 +147,8 @@ final class Library: ObservableObject {
 
     func selectAll() { selection = Set(visible.map(\.id)) }
     func selectNone() { selection = [] }
+    func selectTagged() { selection = Set(visible.filter { meta[$0.url]?.tagged == true }.map(\.id)) }
+    func invertSelection() { selection = Set(visible.map(\.id)).subtracting(selection) }
     func selectSimilar(rating: Int? = nil, colorClass: Int? = nil) {
         selection = Set(visible.filter { item in
             let m = meta[item.url] ?? PhotoMeta()
@@ -363,10 +365,19 @@ final class Library: ObservableObject {
         if virtualTitle != nil { return }
         guard let folder else { return }
         let scanned = sorted(FolderScanner.scan(folder))
-        let known = Set(items.map(\.url))
-        let newOnes = scanned.filter { !known.contains($0.url) }      // genuinely new files, not "metadata not loaded yet"
+        let known = Dictionary(items.map { ($0.url, $0) }, uniquingKeysWith: { a, _ in a })
+        let newOnes = scanned.filter { known[$0.url] == nil }         // genuinely new files, not "metadata not loaded yet"
+        // Rewritten in place by another app (the legacy app saving a rating, an editor saving
+        // over its JPEG): drop what we cached for it and read the file again.
+        let changed = scanned.filter { s in known[s.url].map { $0.modified != s.modified } ?? false }
         let currentID = current?.id
         items = scanned
+        selection = selection.intersection(Set(scanned.map(\.id)))   // files that left the folder leave the selection
+        if !changed.isEmpty {
+            for c in changed { ThumbnailCache.shared.remove(c.url); PreviewCache.shared.remove(c.url); infoCache[c.url] = nil }
+            AppLog.info("rescan: \(changed.count) changed on disk, \(newOnes.count) new")
+            MetadataStore.shared.reloadAsync(changed.map(\.url)) { [weak self] out in self?.meta.merge(out) { _, new in new } }
+        }
         if let id = currentID, let i = visible.firstIndex(where: { $0.id == id }) { currentIndex = i }
         else if let i = currentIndex { currentIndex = visible.isEmpty ? nil : min(i, visible.count - 1) }
         if !newOnes.isEmpty {

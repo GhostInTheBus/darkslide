@@ -6,7 +6,7 @@ enum FolderScanner {
     static func scan(_ folder: URL) -> [PhotoItem] {
         let fm = FileManager.default
         guard let entries = try? fm.contentsOfDirectory(
-            at: folder, includingPropertiesForKeys: [.isRegularFileKey],
+            at: folder, includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey],
             options: [.skipsHiddenFiles]) else { return [] }
 
         var byBase: [String: [URL]] = [:]
@@ -45,6 +45,9 @@ enum FolderScanner {
                     items.append(e)
                 }
             }
+        }
+        for i in items.indices {
+            items[i].modified = (try? items[i].url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
         }
         return items.sorted {
             $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending

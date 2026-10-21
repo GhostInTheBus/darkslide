@@ -1,5 +1,5 @@
 #!/bin/bash
-# Usage: ./build.sh [build|run|release|install|test [scratchdir] [cr2dir]|smoke <folder>]
+# Usage: ./build.sh [build|run|release|install|test [scratchdir] [cr2dir]|watch <scratchdir> <cr2dir>|smoke <folder>]
 #   install = release build copied to /Applications and launched
 # Builds with SwiftPM (no Xcode needed) and wraps the binary in an .app bundle.
 set -euo pipefail
@@ -7,6 +7,15 @@ export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 cd "$(dirname "$0")"
 MODE="${1:-build}"
 if [ "$MODE" = smoke ]; then exec Tools/smoke.sh "${2:-}"; fi
+if [ "$MODE" = watch ]; then
+    # Folder-watcher test: builds the whole model headless and mutates a scratch folder
+    # from outside while it is open. No UI, no keystrokes.
+    mkdir -p build
+    swiftc -swift-version 5 -target arm64-apple-macos14.0 Sources/Darkslide/Models/*.swift Sources/Darkslide/Services/*.swift Sources/Darkslide/Views/*.swift \
+        Tests/Watch/main.swift -o build/watch_tests 2>&1 | grep -E 'error' -A3 || true
+    build/watch_tests "${3:?usage: ./build.sh watch <scratch dir> <folder of RAW files to copy from>}" "$2"
+    exit $?
+fi
 if [ "$MODE" = test ]; then
     mkdir -p build
     S=Sources/Darkslide
