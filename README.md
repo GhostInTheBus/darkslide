@@ -7,7 +7,7 @@ When a photographer comes back from a shoot, the first job isn't editing. It's s
 The classic tools for that job are fast because they never open the full picture; they show the small preview the camera already saved inside each file. Darkslide is a home-built app that works the same way, natively on current Macs. It:
 
 - **Copies pictures off a card** safely, checking every file against the original so a bad copy gets caught before the card is wiped. It can copy to two places at once, a drive and a backup.
-- **Shows them fast** in a grid you can scroll through, with a big preview a keypress away.
+- **Shows them fast** in a grid you can scroll through, with a big preview a keypress away and a filmstrip under it so you never lose your place. A folder navigator on the left (favorites, your places, cards and drives) gets you to the next shoot without a file dialog.
 - **Lets you sort** with one key per star, a color label per picture, and a tag for the keepers. Filter down to just the five-stars, or just the reds.
 - **Names the files** the way you want, with the date, place, and a running number filled in automatically.
 - **Captions them** with the standard fields newspapers and stock agencies read: who, what, where, copyright, keywords. Save a template once, apply it to a whole shoot.
@@ -24,10 +24,12 @@ The daily workflow (ingest, browse, sort, caption, rename, export) is built and 
 ## Install
 
 ```
-./build.sh install
+brew install --cask ghostinthebus/tap/darkslide
 ```
 
-Makes an optimised build, copies it to `/Applications/Darkslide.app` and launches it. Run it again after pulling changes. Settings and templates survive reinstalls; they live in your Library folder, not in the app.
+Or download the zip from the Releases page and drag Darkslide.app to Applications. The app is not notarized: on first launch, right-click it and choose Open.
+
+From source: `./build.sh install` makes an optimised build, copies it to `/Applications/Darkslide.app` and launches it. Settings and templates survive reinstalls; they live in your Library folder, not in the app.
 
 ## Keys you'll use
 
