@@ -14,7 +14,7 @@ if [ "$MODE" = test ]; then
         $S/Services/Variables.swift $S/Services/RenameEngine.swift $S/Services/IngestEngine.swift \
         $S/Services/ExifTool.swift $S/Services/MetadataStore.swift $S/Services/Shortcuts.swift \
         $S/Services/ImageLoader.swift $S/Services/TIFFPreview.swift $S/Services/GPSTrack.swift \
-        $S/Services/ExportEngine.swift $S/Services/ExportExtras.swift $S/Services/Keywords.swift $S/Services/Uploader.swift $S/Services/Catalog.swift $S/Services/FolderScanner.swift \
+        $S/Services/ExportEngine.swift $S/Services/ExportExtras.swift $S/Services/Keywords.swift $S/Services/Uploader.swift $S/Services/Catalog.swift $S/Services/FolderScanner.swift $S/Services/CaptionAI.swift \
         Tests/main.swift -o build/engine_tests
     build/engine_tests "${2:-/tmp/darkslide-engine-test}" "${3:?usage: ./build.sh test <scratch dir> <folder of RAW files to copy from>}"
     exit $?
