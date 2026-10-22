@@ -1,8 +1,17 @@
 # Darkslide
 
-https://github.com/user-attachments/assets/ef5763eb-8481-4cc5-9081-cdbd636f6286
+![Darkslide](docs/images/banner.png)
 
 **The short version.** Darkslide is a free Mac app for the boring half of photography: getting pictures off the memory card, picking the keepers, naming and captioning them, and handing them to your editor. It feels instant because it never opens the huge RAW file; it shows the small JPEG your camera already tucked inside each one. It is a home-built, native Apple Silicon replacement for the paid tool professionals use for this, written so that the two can share the same folders.
+
+## See it
+
+[Watch on YouTube](https://youtu.be/TEMYnK78z-o) (1:26): a folder of RAW files from eight cameras, rated, labeled, previewed at 100%, renamed and captioned, all from the keyboard. Sample photos are CC0 from raw.pixls.us.
+
+| | |
+| --- | --- |
+| ![Contact sheet with stars, a color label and a tag](docs/images/rated.jpg) | ![Full-screen preview with the filmstrip](docs/images/preview.jpg) |
+| ![Rename with a variable template and live preview](docs/images/rename.jpg) | ![IPTC caption sheet](docs/images/caption.jpg) |
 
 ## How it works
 
