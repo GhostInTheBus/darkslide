@@ -1,5 +1,27 @@
 # Darkslide
 
+**The short version.** Darkslide is a free Mac app for the boring half of photography: getting pictures off the memory card, picking the keepers, naming and captioning them, and handing them to your editor. It feels instant because it never opens the huge RAW file; it shows the small JPEG your camera already tucked inside each one. It is a home-built, native Apple Silicon replacement for the paid tool professionals use for this, written so that the two can share the same folders.
+
+## How it works
+
+```mermaid
+flowchart LR
+    card[("Memory card")] -->|"copy + checksum,\nrename on the way in"| folder[("Shoot folder\non your drive or NAS")]
+    folder --> reader["Embedded JPEG reader\n(CR2 · CR3 · NEF · ARW · RAF · DNG …)"]
+    reader --> grid["Contact sheet\nthumbnails in ~15 ms each"]
+    reader --> preview["Full-screen preview\nnext/previous feels instant"]
+    folder <--> exif["exiftool\n(bundled, one long-lived process)"]
+    exif --> meta["Stars · color labels · tags\ncaptions · keywords · GPS"]
+    meta -->|"written inside the file,\nsame fields as the legacy app"| folder
+    grid --> cull["You: 1-5 stars, labels, tag,\nrename, caption templates"]
+    preview --> cull
+    cull --> meta
+    folder -->|"one key"| editor["Affinity / Photoshop"]
+    editor -->|"saved beside the original;\ninherits its caption and stars"| folder
+    folder --> out["Export presets · HTML gallery\nemail / AirDrop · print · slideshow"]
+    ai["Ollama on your Mac\n(or a cloud model with your key)"] -.->|"draft caption,\nnothing saved until you approve"| meta
+```
+
 ## What this is, in plain words
 
 When a photographer comes back from a shoot, the first job isn't editing. It's sorting. Hundreds or thousands of pictures have to come off the memory card, get checked, get the bad ones thrown out, get the good ones starred, get captions and names so they can be found again, and then get handed to the editing program.
