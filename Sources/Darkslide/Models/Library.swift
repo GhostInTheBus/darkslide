@@ -170,7 +170,7 @@ final class Library: ObservableObject {
         var errors: [String] = []
         for item in ts {
             for f in RenameEngine.companions(of: item) {
-                do { try FileManager.default.trashItem(at: f, resultingItemURL: nil) }
+                do { try FileManager.default.trashItem(at: f, resultingItemURL: nil); Catalog.shared.removePath(f) }
                 catch { errors.append("\(f.lastPathComponent): \(error.localizedDescription)") }   // network shares without a .Trashes
             }
         }
@@ -202,7 +202,7 @@ final class Library: ObservableObject {
         if !applied.failed.isEmpty { lastError = "Rename: \(applied.failed.count) failed, first: \(applied.failed[0].1)" }
         // Keep metadata keyed by the new names so nothing re-reads.
         var newMeta = meta
-        for (from, to) in applied.moved { if let m = newMeta.removeValue(forKey: from) { newMeta[to] = m } }
+        for (from, to) in applied.moved { if let m = newMeta.removeValue(forKey: from) { newMeta[to] = m }; Catalog.shared.movePath(from: from, to: to) }
         meta = newMeta
         rescan()
     }
@@ -212,7 +212,7 @@ final class Library: ObservableObject {
         let errs = RenameEngine.undo(last)
         if !errs.isEmpty { lastError = "Undo: " + errs.joined(separator: "; ") }
         var newMeta = meta
-        for (from, to) in last.moved { if let m = newMeta.removeValue(forKey: to) { newMeta[from] = m } }
+        for (from, to) in last.moved { if let m = newMeta.removeValue(forKey: to) { newMeta[from] = m }; Catalog.shared.movePath(from: to, to: from) }
         meta = newMeta
         lastRename = nil
         rescan()
@@ -653,6 +653,7 @@ final class Library: ObservableObject {
             let label = colorClasses.name(m.colorClass)
             MetadataStore.shared.writeCull(m, label: label, to: files) { [weak self] r in
                 guard let self else { return }
+                if r.ok { Catalog.shared.updateCull(item.url, m) }
                 if !r.ok {
                     // Re-read rather than restore `before`: a later write may have succeeded meanwhile.
                     let fresh = MetadataStore.shared.reload([item.url])[item.url] ?? before

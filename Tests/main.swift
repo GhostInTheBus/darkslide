@@ -163,6 +163,19 @@ let hits = cat.search(text: "Springfield", minRating: 0, colorClass: nil, tagged
 check(hits.count == 1 && hits[0].name == "20141030-ING.0002.cr2", "search by city finds the captioned file: \(hits.map(\.name))")
 check(cat.search(text: "ING", minRating: 0, colorClass: nil, taggedOnly: false, from: nil, to: nil).count == 4, "search by name fragment finds all 4")
 check(cat.folders().count == 1 && cat.folders()[0].count == 4, "folder registered")
+do {
+    let a = d1.appendingPathComponent("20141030-ING.0002.cr2"), b = d1.appendingPathComponent("moved.cr2")
+    cat.movePath(from: a, to: b)
+    var h = cat.search(text: "Springfield", minRating: 0, colorClass: nil, taggedOnly: false, from: nil, to: nil)
+    check(h.count == 1 && h[0].name == "moved.cr2", "catalog follows a rename: \(h.map(\.name))")
+    cat.movePath(from: b, to: a)
+    var pm = PhotoMeta(); pm.rating = 5
+    cat.updateCull(a, pm)
+    h = cat.search(text: "Springfield", minRating: 5, colorClass: nil, taggedOnly: false, from: nil, to: nil)
+    check(h.count == 1, "catalog rating follows a cull write")
+    cat.removePath(a)
+    check(cat.search(text: "Springfield", minRating: 0, colorClass: nil, taggedOnly: false, from: nil, to: nil).isEmpty && cat.count() == 3, "catalog drops a trashed file")
+}
 
 // --- Review fixes
 print("Review fixes")

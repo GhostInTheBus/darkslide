@@ -166,6 +166,18 @@ final class Catalog {
         return out
     }
 
+    /// Keep rows in step with renames and trashes so a search never returns a path that is gone.
+    /// Rows are only touched if the file was indexed; nothing is added here.
+    func movePath(from: URL, to: URL) {
+        run("UPDATE OR REPLACE photos SET path = ?, folder = ?, name = ? WHERE path = ?",
+            [to.path, to.deletingLastPathComponent().path, to.lastPathComponent, from.path])
+    }
+    func removePath(_ url: URL) { run("DELETE FROM photos WHERE path = ?", [url.path]) }
+    /// Refresh the cull fields of an indexed file after a rating/label/tag write.
+    func updateCull(_ url: URL, _ m: PhotoMeta) {
+        run("UPDATE photos SET rating = ?, class = ?, tagged = ? WHERE path = ?", [m.rating, m.colorClass, m.tagged ? 1 : 0, url.path])
+    }
+
     func removeFolder(_ path: String) {
         run("DELETE FROM photos WHERE path LIKE ? ESCAPE '\\'", [Catalog.likePrefix(path)])
         run("DELETE FROM photos WHERE folder = ?", [path])
