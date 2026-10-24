@@ -7,6 +7,7 @@ struct CaptionView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var template = IPTCTemplate()
     @State private var templateName = ""
+    @State private var settled = false
     @State private var showSave = false
     @State private var showVariables = false
     @State private var aiBusy = false
@@ -48,11 +49,11 @@ struct CaptionView: View {
                         Text(IPTCTemplate.fieldLabels[key] ?? key).frame(width: 120, alignment: .trailing)
                         if key == "caption" || key == "instructions" || key == "keywords" {
                             TextEditor(text: binding(key)).frame(height: key == "caption" ? 70 : 40).font(.body)
-                                .onChange(of: template.fields[key] ?? "") { _, _ in template.apply.insert(key) }
+                                .onChange(of: template.fields[key] ?? "") { _, _ in if settled { template.apply.insert(key) } }
                         } else {
                             HStack(spacing: 2) {
                                 TextField("", text: binding(key))
-                                    .onChange(of: template.fields[key] ?? "") { _, _ in template.apply.insert(key) }
+                                    .onChange(of: template.fields[key] ?? "") { _, _ in if settled { template.apply.insert(key) } }
                                 if let recent = Keywords.history[key], !recent.isEmpty {
                                     Menu { ForEach(recent, id: \.self) { v in Button(v) { template.fields[key] = v; template.apply.insert(key) } } }
                                         label: { Image(systemName: "clock.arrow.circlepath") }.menuStyle(.borderlessButton).frame(width: 22).help("Recent values")
@@ -97,13 +98,17 @@ struct CaptionView: View {
         .padding(16)
         .frame(width: 720)
         .onAppear {
-            if items.count == 1, let m = library.meta[items[0].url] {
-                template = IPTCTemplate.from(meta: m)
+            if items.count == 1 {
+                // Metadata may not be loaded yet right after opening a big folder; an empty record is
+                // still this photo's record, never the stationery pad.
+                template = IPTCTemplate.from(meta: library.meta[items[0].url] ?? PhotoMeta())
                 template.apply = []     // editing one photo: only changed fields get written
                 template.keywordsAppend = false
             } else if let name = Optional(library.settings.lastCaptionTemplate), let t = library.settings.captionTemplates[name] {
                 template = t
             }
+            // The field onChange handlers fire once for the initial fill; only edits after that count.
+            DispatchQueue.main.async { settled = true }
         }
         .sheet(isPresented: $showSave) {
             VStack(spacing: 12) {

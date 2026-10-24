@@ -77,7 +77,14 @@ struct ThumbnailGridView: NSViewRepresentable {
         }
         let visible = library.visible
         co.colorClasses = library.colorClasses
-        if co.items != visible {
+        let sameFiles = co.items.count == visible.count && zip(co.items, visible).allSatisfy { $0.id == $1.id }
+        if sameFiles && co.items != visible {
+            // Same files, some rewritten on disk (mtime changed): refresh just those cells.
+            let rewritten = Set(zip(co.items, visible).enumerated().compactMap { $1.0 != $1.1 ? IndexPath(item: $0, section: 0) : nil })
+            co.items = visible
+            cv.reloadItems(at: rewritten)
+        }
+        if !sameFiles {
             co.items = visible
             co.meta = library.meta
             cv.reloadData()

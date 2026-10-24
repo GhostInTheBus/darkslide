@@ -135,7 +135,7 @@ struct GPSTrackView: View {
                     done += 1
                 }
             }
-            if reverseGeocode { library.selection = [item.id]; GPSView.reverseGeocode(lat: r.lat!, lon: r.lon!, library: library, items: [item]) }
+            if reverseGeocode { GPSView.reverseGeocode(lat: r.lat!, lon: r.lon!, library: library, items: [item]) }
         }
         status = "Writing…"
         dismiss()

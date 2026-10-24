@@ -50,13 +50,25 @@ final class Library: ObservableObject {
     enum SortKey: String, CaseIterable { case name = "Name", captureTime = "Capture time", rating = "Rating", colorClass = "Color class", modified = "Modified" }
 
     // Filters
-    @Published var filterRatings: Set<Int> = [] { didSet { visibleCache = nil } }      // empty = all
-    @Published var filterClasses: Set<Int> = [] { didSet { visibleCache = nil } }      // empty = all
-    @Published var filterTaggedOnly = false { didSet { visibleCache = nil } }
-    @Published var quickSearch = "" { didSet { visibleCache = nil } }                 // Quick Search: filename + any caption field
-    @Published var filterDateFrom: Date? = nil { didSet { visibleCache = nil } }
-    @Published var filterDateTo: Date? = nil { didSet { visibleCache = nil } }
-    @Published var secondarySortKey: SortKey? = nil
+    // Filter changes shrink or grow `visible`; the current photo must stay the same file, not the same index.
+    @Published var filterRatings: Set<Int> = [] { willSet { anchor() } didSet { visibleCache = nil; reanchor() } }      // empty = all
+    @Published var filterClasses: Set<Int> = [] { willSet { anchor() } didSet { visibleCache = nil; reanchor() } }      // empty = all
+    @Published var filterTaggedOnly = false { willSet { anchor() } didSet { visibleCache = nil; reanchor() } }
+    @Published var quickSearch = "" { willSet { anchor() } didSet { visibleCache = nil; reanchor() } }                 // Quick Search: filename + any caption field
+    @Published var filterDateFrom: Date? = nil { willSet { anchor() } didSet { visibleCache = nil; reanchor() } }
+    @Published var filterDateTo: Date? = nil { willSet { anchor() } didSet { visibleCache = nil; reanchor() } }
+    @Published var secondarySortKey: SortKey? = nil { didSet { resort() } }
+    private var anchorID: URL?
+    private func anchor() { anchorID = current?.id }
+    private func reanchor() {
+        if let id = anchorID, let i = visible.firstIndex(where: { $0.id == id }) { currentIndex = i }
+        else if let i = currentIndex { currentIndex = visible.isEmpty ? nil : min(i, visible.count - 1) }
+        anchorID = nil
+    }
+    /// URLs this app wrote in the last few seconds: the folder watcher must not treat them as
+    /// "changed by another app" and throw away thumbnails and the optimistic metadata.
+    private var ownWrites: [URL: Date] = [:]
+    func noteOwnWrite(_ urls: [URL]) { let now = Date(); for u in urls { ownWrites[u] = now } }
     @Published var showDateRange = false
     @Published var showSelectRange = false
     @Published var showRemap = false
@@ -117,7 +129,9 @@ final class Library: ObservableObject {
     }
 
     func resort() {
+        anchor()
         items = sorted(items)
+        reanchor()
     }
 
     func sorted(_ list: [PhotoItem]) -> [PhotoItem] {
@@ -234,6 +248,7 @@ final class Library: ObservableObject {
             Keywords.remember(fields)
             var files = [item.url]
             if let j = item.sidecarJPEG { files.append(j) }
+            noteOwnWrite(files)
             MetadataStore.shared.writeFields(fields, appendKeywords: t.keywordsAppend, appendCaption: t.captionAppend, to: files) { [weak self] r in
                 DispatchQueue.main.async {
                     guard let self else { return }
@@ -325,6 +340,7 @@ final class Library: ObservableObject {
         let gen = openGeneration
         folder = url
         virtualTitle = nil
+        stopSlideshow(); compareMode = false
         items = []
         selection = []
         currentIndex = nil
@@ -377,7 +393,9 @@ final class Library: ObservableObject {
         let newOnes = scanned.filter { known[$0.url] == nil }         // genuinely new files, not "metadata not loaded yet"
         // Rewritten in place by another app (the legacy app saving a rating, an editor saving
         // over its JPEG): drop what we cached for it and read the file again.
-        let changed = scanned.filter { s in known[s.url].map { $0.modified != s.modified } ?? false }
+        let cutoff = Date().addingTimeInterval(-10)
+        ownWrites = ownWrites.filter { $0.value > cutoff }
+        let changed = scanned.filter { s in known[s.url].map { $0.modified != s.modified } ?? false }.filter { ownWrites[$0.url] == nil }
         let currentID = current?.id
         items = scanned
         selection = selection.intersection(Set(scanned.map(\.id)))   // files that left the folder leave the selection
@@ -582,7 +600,7 @@ final class Library: ObservableObject {
         guard !visible.isEmpty else { return }
         if currentIndex == nil { currentIndex = 0 }
         isPreviewing.toggle()
-        if isPreviewing { prefetchAround(currentIndex ?? 0) }
+        if isPreviewing { prefetchAround(currentIndex ?? 0) } else { stopSlideshow() }
     }
 
     func step(_ delta: Int) {
@@ -651,6 +669,7 @@ final class Library: ObservableObject {
             var files = [item.url]
             if let j = item.sidecarJPEG { files.append(j) }
             let label = colorClasses.name(m.colorClass)
+            noteOwnWrite(files)
             MetadataStore.shared.writeCull(m, label: label, to: files) { [weak self] r in
                 guard let self else { return }
                 if r.ok { Catalog.shared.updateCull(item.url, m) }
@@ -705,6 +724,7 @@ final class Library: ObservableObject {
         let ts = targets
         var files: [URL] = []
         for i in ts { files.append(i.url); if let j = i.sidecarJPEG { files.append(j) } }
+        noteOwnWrite(files)
         MetadataStore.shared.writeGPS(latitude: latitude, longitude: longitude, files: files) { [weak self] r in
             DispatchQueue.main.async {
                 guard let self else { return }
@@ -758,6 +778,7 @@ final class Library: ObservableObject {
             guard !fields.isEmpty else { continue }
             count += 1
             var files = [item.url]; if let j = item.sidecarJPEG { files.append(j) }
+            noteOwnWrite(files)
             MetadataStore.shared.writeFields(fields, appendKeywords: false, appendCaption: false, to: files) { [weak self] r in
                 DispatchQueue.main.async {
                     guard let self else { return }

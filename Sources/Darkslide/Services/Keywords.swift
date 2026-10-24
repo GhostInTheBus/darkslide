@@ -49,7 +49,8 @@ enum Keywords {
             let depth = line.prefix { $0 == "\t" }.count
             let body = line.trimmingCharacters(in: .whitespaces)
             let parts = body.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
-            let node = KeywordNode(term: parts[0], synonyms: parts.count > 1 ? parts[1].split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } : [])
+            guard let term = parts.first, !term.isEmpty else { continue }
+            let node = KeywordNode(term: term, synonyms: parts.count > 1 ? parts[1].split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) } : [])
             while let last = stack.last, last.0 >= depth { stack.removeLast() }
             if let p = stack.last?.1 { node.parent = p; p.children.append(node) } else { roots.append(node) }
             stack.append((depth, node))
