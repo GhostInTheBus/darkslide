@@ -103,7 +103,7 @@ struct AppSettings: Codable {
     }
     func save() {
         let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
-        if let d = try? enc.encode(self) { try? d.write(to: AppSettings.file) }
+        if let d = try? enc.encode(self) { try? d.write(to: AppSettings.file, options: .atomic) }
     }
 }
 

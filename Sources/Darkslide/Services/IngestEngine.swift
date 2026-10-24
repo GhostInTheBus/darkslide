@@ -32,6 +32,7 @@ final class IngestEngine {
         var destinationFolder: URL?
         var nextSequence = 0
         var copied: [URL] = []
+        var copiedSecondary: [URL] = []
     }
 
     struct LogEntry: Codable {
@@ -89,8 +90,18 @@ final class IngestEngine {
         guard let d = try? Data(contentsOf: ingestedIndex), let s = try? JSONDecoder().decode([String].self, from: d) else { return [] }
         return Set(s)
     }
+    private static let ingestedLock = NSLock()
+    /// Merge with what is on disk: a manual ingest and the live watcher can finish out of order.
     private static func saveIngested(_ s: Set<String>) {
-        if let d = try? JSONEncoder().encode(Array(s).sorted()) { try? d.write(to: ingestedIndex) }
+        ingestedLock.lock(); defer { ingestedLock.unlock() }
+        let merged = s.union(loadIngested())
+        if let d = try? JSONEncoder().encode(Array(merged).sorted()) { try? d.write(to: ingestedIndex) }
+    }
+    /// Base names (lowercased, without extension) already present in a folder, so a RAW+JPEG
+    /// pair gets one unique base instead of a per-extension suffix.
+    private static func existingBases(in dir: URL) -> Set<String> {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+        return Set(names.map { ($0 as NSString).deletingPathExtension.lowercased() })
     }
     static func ingestKey(_ f: SourceFile) -> String { "\(f.cardID)|\(f.url.lastPathComponent)|\(f.size)" }
 
@@ -131,6 +142,7 @@ final class IngestEngine {
         var secondaryFolder: URL?
         // Items that share a base name (RAW+JPEG, .wav) get the same new name.
         var baseNameMap: [String: String] = [:]
+        var takenBases = Set<String>()   // lowercased bases in use across both destinations
 
         for f in files {
             if cancelled { break }
@@ -147,41 +159,56 @@ final class IngestEngine {
                 secondaryFolder = o.secondary.map { sub.isEmpty ? $0 : $0.appendingPathComponent(sub) }
                 for d in [destFolder, secondaryFolder].compactMap({ $0 }) {
                     try? fm.createDirectory(at: d, withIntermediateDirectories: true)
+                    takenBases.formUnion(IngestEngine.existingBases(in: d))
                 }
                 progress.destinationFolder = destFolder
             }
 
             let srcBase = f.url.deletingPathExtension().lastPathComponent
-            var newBase = srcBase
-            // the legacy app renames every file on the card with the template, video included; files
-            // sharing a base name (RAW+JPEG, .wav) get one name and one sequence number.
-            if let t = o.renameTemplate, !t.isEmpty {
-                if let existing = baseNameMap[srcBase] { newBase = existing }
-                else {
+            // Companions are files sharing a base name in the same source folder (RAW+JPEG, .wav).
+            // Two cards, or 100CANON/101CANON after a counter wrap, can repeat a base name.
+            let pairKey = f.url.deletingLastPathComponent().path + "|" + srcBase
+            var newBase: String
+            if let existing = baseNameMap[pairKey] { newBase = existing }
+            else {
+                // the legacy app renames every file on the card with the template, video included;
+                // companions get one name and one sequence number.
+                if let t = o.renameTemplate, !t.isEmpty {
                     newBase = RenameEngine.sanitize(Variables.expand(t, ctx))
-                    baseNameMap[srcBase] = newBase
+                    if newBase.isEmpty { newBase = srcBase }   // never let a blank template name the file after its folder
                     seq += 1
-                }
+                } else { newBase = srcBase }
+                // One suffix per base, checked against both destinations, so the pair stays a pair
+                // and the mirror gets the same name as the primary.
+                var candidate = newBase, n = 1
+                while takenBases.contains(candidate.lowercased()) { candidate = "\(newBase)-\(n)"; n += 1 }
+                newBase = candidate
+                takenBases.insert(newBase.lowercased())
+                baseNameMap[pairKey] = newBase
             }
             let ext = f.url.pathExtension
             let primaryDest = IngestEngine.uniqueDestination(destFolder!.appendingPathComponent(newBase).appendingPathExtension(ext))
             let secondaryDest = secondaryFolder.map { IngestEngine.uniqueDestination($0.appendingPathComponent(primaryDest.lastPathComponent)) }
 
             do {
-                let hash = try IngestEngine.copyHashed(from: f.url, to: primaryDest)
-                let verified = (try? IngestEngine.sha256(of: primaryDest)) == hash
+                let (hash, bytes) = try IngestEngine.copyHashed(from: f.url, to: primaryDest)
+                // A file the camera is still writing (live ingest) copies short; its hash would still match itself.
+                let sizeNow = (try? fm.attributesOfItem(atPath: f.url.path)[.size] as? Int64) ?? f.size
+                let complete = bytes == f.size && bytes == sizeNow
+                let verified = complete && (try? IngestEngine.sha256(of: primaryDest)) == hash
                 var secondaryOK = true
                 if let s = secondaryDest {
-                    let h2 = try IngestEngine.copyHashed(from: f.url, to: s)
+                    let (h2, _) = try IngestEngine.copyHashed(from: f.url, to: s)
                     secondaryOK = h2 == hash && (try? IngestEngine.sha256(of: s)) == hash
                 }
                 if !verified || !secondaryOK {
-                    let msg = "Checksum mismatch: \(f.url.lastPathComponent)"
+                    let msg = complete ? "Checksum mismatch: \(f.url.lastPathComponent)" : "Incomplete on card (still writing?): \(f.url.lastPathComponent)"
                     progress.failures.append(msg); log.failures.append(msg)
                     try? fm.removeItem(at: primaryDest); if let s = secondaryDest { try? fm.removeItem(at: s) }   // never leave a bad copy that looks real
                 } else {
                     ingested.insert(IngestEngine.ingestKey(f))
                     progress.copied.append(primaryDest)
+                    if let s = secondaryDest { progress.copiedSecondary.append(s) }
                 }
                 log.entries.append(LogEntry(source: f.url.path, primary: primaryDest.path, secondary: secondaryDest?.path,
                                             sha256: hash, verified: verified && secondaryOK, bytes: f.size))
@@ -223,22 +250,24 @@ final class IngestEngine {
     }
 
     /// Stream-copy while hashing the bytes read, so the source is read exactly once.
-    static func copyHashed(from: URL, to: URL) throws -> String {
+    static func copyHashed(from: URL, to: URL) throws -> (hash: String, bytes: Int64) {
         let input = try FileHandle(forReadingFrom: from)
         defer { try? input.close() }
         FileManager.default.createFile(atPath: to.path, contents: nil)
         let output = try FileHandle(forWritingTo: to)
         defer { try? output.close() }
         var hasher = SHA256()
+        var bytes: Int64 = 0
         while let chunk = try input.read(upToCount: 4 << 20), !chunk.isEmpty {
             hasher.update(data: chunk)
             try output.write(contentsOf: chunk)
+            bytes += Int64(chunk.count)
         }
         try output.synchronize()
         if let attrs = try? FileManager.default.attributesOfItem(atPath: from.path), let d = attrs[.modificationDate] {
             try? FileManager.default.setAttributes([.modificationDate: d], ofItemAtPath: to.path)
         }
-        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        return (hasher.finalize().map { String(format: "%02x", $0) }.joined(), bytes)
     }
 
     static func sha256(of url: URL) throws -> String {

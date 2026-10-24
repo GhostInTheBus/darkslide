@@ -22,6 +22,11 @@ enum ExportEngine {
                     // Metadata: copy everything from the source, then apply the preset's rules.
                     var args = ["-overwrite_original", "-ignoreMinorErrors", "-tagsFromFile", item.url.path, "-all:all", "-unsafe"]
                     if preset.stripAllMetadata { args = ["-overwrite_original", "-all="] }
+                    else {
+                        // Pixels are already upright, cropped and resized: do not carry the source's
+                        // Orientation, crop recipe or pixel dimensions onto the export.
+                        args += ["-Orientation#=1", "-XMP-crs:all=", "-ExifImageWidth=", "-ExifImageHeight="]
+                    }
                     if preset.stripGPS { args += ["-gps:all=", "-XMP-exif:GPS*="] }
                     if preset.copyrightStamp {
                         let m = meta[item.url]
@@ -48,6 +53,16 @@ enum ExportEngine {
         var errorDescription: String? { self == .decode ? "could not decode image" : "could not write JPEG" }
     }
 
+    /// Draw through a CGContext so the pixels are transformed; `copy(colorSpace:)` only retags them.
+    static func convertedToSRGB(_ image: CGImage) -> CGImage? {
+        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
+        ctx.interpolationQuality = .high
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        return ctx.makeImage()
+    }
+
     static func writeJPEG(from src: URL, to dest: URL, longEdge: Int, quality: Int, srgb: Bool,
                           watermark: String? = nil, corner: Int = 3, opacity: Double = 0.6, scale: Double = 0.03, crop: CropRect? = nil) throws {
         // With a crop, decode large enough that the cropped result still reaches longEdge.
@@ -61,7 +76,7 @@ enum ExportEngine {
         if let c = crop, c.hasCrop, let cropped = image.cropping(to: c.pixelRect(width: image.width, height: image.height)) { image = cropped }
         if longEdge > 0, max(image.width, image.height) > longEdge, let r = resample(image, longEdge: longEdge) { image = r }
         if let text = watermark, !text.isEmpty { image = stamp(image, text: text, corner: corner, opacity: opacity, scale: scale) }
-        if srgb, let space = image.colorSpace, space.name != CGColorSpace.sRGB, let converted = image.copy(colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!) {
+        if srgb, let space = image.colorSpace, space.name != CGColorSpace.sRGB, let converted = convertedToSRGB(image) {
             image = converted
         }
         guard let out = CGImageDestinationCreateWithURL(dest as CFURL, UTType.jpeg.identifier as CFString, 1, nil) else { throw ExportError.encode }

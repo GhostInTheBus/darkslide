@@ -41,7 +41,7 @@ struct Shortcuts {
 
     func save() {
         let dict = Dictionary(uniqueKeysWithValues: map.map { ($0.key.rawValue, $0.value) })
-        if let d = try? JSONEncoder().encode(dict) { try? d.write(to: Shortcuts.file) }
+        if let d = try? JSONEncoder().encode(dict) { try? d.write(to: Shortcuts.file, options: .atomic) }
     }
 
     /// Which action, if any, this key event triggers.

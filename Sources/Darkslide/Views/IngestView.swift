@@ -153,7 +153,7 @@ struct IngestView: View {
                 library.saveSettings()
                 if let d = p.destinationFolder {
                     if !s.ingestApplyTemplate.isEmpty, let t = s.captionTemplates[s.ingestApplyTemplate] {
-                        let just = p.copied.filter { PhotoItem.imageExtensions.contains($0.pathExtension.lowercased()) }
+                        let just = (p.copied + p.copiedSecondary).filter { PhotoItem.imageExtensions.contains($0.pathExtension.lowercased()) }   // the mirror gets the caption too
                         library.applyTemplate(t, to: just.map { PhotoItem(id: $0, url: $0, sidecarJPEG: nil, displayName: $0.lastPathComponent) })
                     }
                     if s.ingestOpenWhenDone { library.open(d) }

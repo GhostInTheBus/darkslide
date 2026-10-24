@@ -71,11 +71,20 @@ enum Uploader {
                 let portPart = c.port > 0 ? ":\(c.port)" : ""
                 var args = ["-sS", "--fail", "-T", f.path, "\(scheme)://\(c.host)\(portPart)\(dir)", "--ftp-create-dirs"]
                 if !c.passive { args.append("--ftp-port"); args.append("-") }
-                if !c.user.isEmpty { args += ["--user", "\(c.user):\(pw)"] }
+                // Credentials go in on stdin as a curl config line, never on the command line where `ps` shows them.
+                var config: Data? = nil
+                if !c.user.isEmpty {
+                    let q: (String) -> String = { $0.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") }
+                    args += ["-K", "-"]
+                    config = "user = \"\(q(c.user)):\(q(pw))\"\n".data(using: .utf8)
+                }
                 p.arguments = args
                 let err = Pipe(); p.standardError = err; p.standardOutput = FileHandle.nullDevice
+                let inPipe = Pipe(); if config != nil { p.standardInput = inPipe }
                 do {
-                    try p.run(); p.waitUntilExit()
+                    try p.run()
+                    if let config { inPipe.fileHandleForWriting.write(config); try? inPipe.fileHandleForWriting.close() }
+                    p.waitUntilExit()
                     if p.terminationStatus == 0 { result.sent.append(f.lastPathComponent) }
                     else { result.failures.append("\(f.lastPathComponent): \(String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines))") }
                 } catch { result.failures.append("\(f.lastPathComponent): \(error.localizedDescription)") }

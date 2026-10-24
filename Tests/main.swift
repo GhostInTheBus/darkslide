@@ -180,6 +180,78 @@ let emptyPlan = RenameEngine.plan(items: items, template: "{headline}", context:
 check(emptyPlan.entries.allSatisfy { $0.collision && $0.from == $0.to }, "empty expansion is flagged, nothing moves out of the folder")
 let ap = RenameEngine.apply(emptyPlan); check(ap.moved.isEmpty, "apply moved nothing for empty names")
 check(Catalog.likePrefix("/Photos/2024/Jan") == "/Photos/2024/Jan/%" && Catalog.likePrefix("/a_b%c") == "/a\\_b\\%c/%", "catalog LIKE prefix has trailing slash and escapes wildcards")
+// --- 2026-10-24 review: ingest naming, exiftool error timing, $ in append, UTF-8 IPTC, export orientation
+print("Review fixes 2")
+check(RenameEngine.sanitize(".hidden") == "hidden" && RenameEngine.sanitize("..x") == "x", "sanitize strips leading dots")
+do {
+    // Two source folders repeating a base name (counter wrap), a pair whose RAW name is already taken
+    // in the destination, and a template that expands to nothing.
+    let c2 = scratch.appendingPathComponent("CARD2/DCIM"); let f100 = c2.appendingPathComponent("100CANON"), f101 = c2.appendingPathComponent("101CANON")
+    try! fm.createDirectory(at: f100, withIntermediateDirectories: true); try! fm.createDirectory(at: f101, withIntermediateDirectories: true)
+    let src = cr2s.first!
+    try! fm.copyItem(at: src, to: f100.appendingPathComponent("IMG_0001.CR2")); try! Data(repeating: 1, count: 5000).write(to: f100.appendingPathComponent("IMG_0001.JPG"))
+    try! fm.copyItem(at: src, to: f101.appendingPathComponent("IMG_0001.CR2"))
+    let dst = scratch.appendingPathComponent("dest3"); let sub = dst.appendingPathComponent("20141030_Test"); try! fm.createDirectory(at: sub, withIntermediateDirectories: true)
+    try! Data(repeating: 2, count: 10).write(to: sub.appendingPathComponent("20141030-P.0001.CR2"))   // leftover from a previous run
+    let e2 = IngestEngine(); var fin2: IngestEngine.Progress?
+    e2.onProgress = { p in if p.finished { fin2 = p } }
+    let o2 = IngestEngine.Options(sources: [scratch.appendingPathComponent("CARD2")], primary: dst, secondary: nil,
+                                  folderTemplate: "{datesort}_{jobname}", renameTemplate: "{datesort}-P.{seqn}", jobName: "Test",
+                                  startSequence: 1, sequencePadding: 4, copyNonImages: true, skipMirrorCard: false,
+                                  skipAlreadyIngested: false, eject: false, user: UserInfo())
+    e2.run(o2) { url in (ImageLoader.captureInfo(for: url), PhotoMeta()) }
+    let dl = Date().addingTimeInterval(60); while fin2 == nil && Date() < dl { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+    let names = Set((try? fm.contentsOfDirectory(atPath: sub.path)) ?? [])
+    check(fin2?.failures.isEmpty == true && fin2?.done == 3, "second ingest copied 3 files: \(fin2?.failures ?? []) done=\(fin2?.done ?? -1)")
+    check(names.contains("20141030-P.0001-1.CR2") && names.contains("20141030-P.0001-1.JPG"), "pair keeps one base when the RAW name was taken: \(names.sorted())")
+    check(names.contains("20141030-P.0002.CR2"), "same base name in another DCIM folder is a different file, not a companion: \(names.sorted())")
+    // Empty template: files keep their own names rather than being named after the folder.
+    let e3 = IngestEngine(); var fin3: IngestEngine.Progress?
+    e3.onProgress = { p in if p.finished { fin3 = p } }
+    var o3 = o2; o3.renameTemplate = "{headline}"; o3.primary = scratch.appendingPathComponent("dest4")
+    e3.run(o3) { url in (ImageLoader.captureInfo(for: url), PhotoMeta()) }
+    let dl3 = Date().addingTimeInterval(60); while fin3 == nil && Date() < dl3 { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
+    let names3 = Set((try? fm.contentsOfDirectory(atPath: o3.primary.appendingPathComponent("20141030_Test").path)) ?? [])
+    check(names3.contains("IMG_0001.CR2") && names3.contains("IMG_0001.JPG") && names3.contains("IMG_0001-1.CR2"), "blank template falls back to source names: \(names3.sorted())")
+}
+do {
+    // A write that fails must report !ok on the same command (stderr sentinel), and the next command must be clean.
+    let ro = d1.appendingPathComponent("readonly.cr2"); try? fm.removeItem(at: ro); try! fm.copyItem(at: cr2s.first!, to: ro)
+    try! fm.setAttributes([.posixPermissions: 0o444], ofItemAtPath: ro.path)
+    var pm = PhotoMeta(); pm.rating = 2
+    let s1 = DispatchSemaphore(value: 0); var r1: ExifTool.Result?, r2: ExifTool.Result?
+    MetadataStore.shared.writeCull(pm, label: "", to: [ro]) { r in r1 = r; s1.signal() }; _ = s1.wait(timeout: .now() + 30)
+    MetadataStore.shared.writeCull(pm, label: "", to: [mlFile]) { r in r2 = r; s1.signal() }; _ = s1.wait(timeout: .now() + 30)
+    check(r1?.ok == false, "write to a read-only file reports failure on its own command: \(r1?.error ?? "nil")")
+    check(r2?.ok == true, "the following write is not blamed for it: \(r2?.error ?? "")")
+    try? fm.setAttributes([.posixPermissions: 0o644], ofItemAtPath: ro.path)
+    // $ in an appended caption is literal; non-Latin text survives IPTC.
+    MetadataStore.shared.writeFields(["caption": "Base"], appendKeywords: false, appendCaption: false, to: [mlFile]) { _ in s1.signal() }; _ = s1.wait(timeout: .now() + 30)
+    MetadataStore.shared.writeFields(["caption": "costs $5"], appendKeywords: false, appendCaption: true, to: [mlFile]) { _ in s1.signal() }; _ = s1.wait(timeout: .now() + 30)
+    let capBack = MetadataStore.shared.reload([mlFile])[mlFile]?.caption ?? ""
+    check(capBack == "Base costs $5", "appended caption keeps a literal $: \(capBack.debugDescription)")
+    MetadataStore.shared.writeFields(["caption": "Zürich — 東京 🙂", "city": "Zürich"], appendKeywords: false, appendCaption: false, to: [mlFile]) { _ in s1.signal() }; _ = s1.wait(timeout: .now() + 30)
+    let iptc = ExifTool.shared.run(["-s3", "-IPTC:City", "-IPTC:CodedCharacterSet", mlFile.path]).output.split(separator: "\n").map(String.init)
+    check(iptc.first == "Zürich" && iptc.count == 2 && iptc[1].uppercased().contains("UTF"), "IPTC written as UTF-8 with CodedCharacterSet: \(iptc)")
+    let finderTag = ExifTool.shared.run(["-s3", "-XMP-xmp:Rating", mlFile.path]).output
+    _ = finderTag
+}
+do {
+    // Export: a rotated source exports with upright metadata (Orientation 1), and the preview survives.
+    let rot = d1.appendingPathComponent("rot.cr2"); try? fm.removeItem(at: rot); try! fm.copyItem(at: cr2s.first!, to: rot)
+    _ = ExifTool.shared.run(["-overwrite_original", "-n", "-Orientation=6", rot.path])
+    let outDir = scratch.appendingPathComponent("export-rot"); try! fm.createDirectory(at: outDir, withIntermediateDirectories: true)
+    var preset = ExportPreset(name: "t", longEdge: 800, quality: 85); preset.convertToSRGB = true
+    var er: ExportEngine.Result?
+    ExportEngine.export(items: [PhotoItem(id: rot, url: rot, sidecarJPEG: nil, displayName: "rot.cr2")], preset: preset, to: outDir, meta: [:],
+                        copyright: "", creator: "", watermark: nil, progress: { _, _ in }) { r in er = r }
+    let dl2 = Date().addingTimeInterval(60); while er == nil && Date() < dl2 { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }   // completion lands on main
+    let written = er?.written.first
+    let o = written.map { ExifTool.shared.run(["-s3", "-n", "-Orientation", $0.path]).output.trimmingCharacters(in: .whitespacesAndNewlines) } ?? "none"
+    let dims = written.flatMap { ImageLoader.decoded(for: $0, maxPixel: 4000) }.map { ($0.width, $0.height) } ?? (0, 0)
+    check(er?.failures.isEmpty == true && (o == "1" || o.isEmpty), "exported JPEG has Orientation 1 (got \(o)): result=\(er.map { "written \($0.written.count) failures \($0.failures)" } ?? "nil (completion never came)")")
+    check(dims.0 < dims.1, "rotated source exports as portrait pixels: \(dims)")
+}
 // --- Other makers' RAW formats (optional: a folder of CC0 samples from raw.pixls.us)
 let samples = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Projects/raw-samples")
 if let list = try? fm.contentsOfDirectory(at: samples, includingPropertiesForKeys: nil), !list.isEmpty {

@@ -54,8 +54,12 @@ extension ExportEngine {
             let large = folder.appendingPathComponent("images"), thumbs = folder.appendingPathComponent("thumbs")
             try? fm.createDirectory(at: large, withIntermediateDirectories: true); try? fm.createDirectory(at: thumbs, withIntermediateDirectories: true)
             var cards: [String] = []
+            var used = Set<String>()   // a RAW and its TIFF edit share a base name; so do catalog results from two folders
             for (i, item) in items.enumerated() {
-                let base = item.url.deletingPathExtension().lastPathComponent
+                var base = item.url.deletingPathExtension().lastPathComponent
+                var n = 1
+                while used.contains(base.lowercased()) || fm.fileExists(atPath: large.appendingPathComponent(base + ".jpg").path) { base = item.url.deletingPathExtension().lastPathComponent + "-\(n)"; n += 1 }
+                used.insert(base.lowercased())
                 do {
                     try writeJPEG(from: item.url, to: large.appendingPathComponent(base + ".jpg"), longEdge: largeEdge, quality: 88, srgb: true, crop: meta[item.url]?.crop)
                     try writeJPEG(from: item.url, to: thumbs.appendingPathComponent(base + ".jpg"), longEdge: thumbEdge, quality: 80, srgb: true, crop: meta[item.url]?.crop)

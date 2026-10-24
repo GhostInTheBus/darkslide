@@ -23,6 +23,8 @@ final class ExifTool {
     private let errLock = NSLock()
     private(set) var lastError: String = ""
     var log: ((String) -> Void)?
+    private let errReady = DispatchSemaphore(value: 0)
+    private static let errSentinel = "{readyERR}"
 
     struct Result {
         let output: String
@@ -33,7 +35,7 @@ final class ExifTool {
     private func start() throws {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: ExifTool.executable)
-        p.arguments = ["-stay_open", "True", "-@", "-", "-common_args", "-charset", "filename=utf8", "-charset", "utf8"]
+        p.arguments = ["-stay_open", "True", "-@", "-", "-common_args", "-charset", "filename=utf8", "-charset", "utf8", "-charset", "iptc=utf8"]
         let inPipe = Pipe(), outPipe = Pipe(), errPipe = Pipe()
         p.standardInput = inPipe; p.standardOutput = outPipe; p.standardError = errPipe
         signal(SIGPIPE, SIG_IGN)      // a dead child must not take the app with it
@@ -47,6 +49,7 @@ final class ExifTool {
             let d = h.availableData
             guard let self, !d.isEmpty else { return }
             self.errLock.lock(); self.errBuffer.append(d); self.errLock.unlock()
+            self.errReady.signal()
         }
     }
 
@@ -66,7 +69,9 @@ final class ExifTool {
         }
         guard let stdin, let stdout else { return Result(output: "", error: "exiftool not running") }
         var cmd = args.map(ExifTool.argLine).joined(separator: "\n")
-        cmd += "\n-execute\n"
+        // -echo4 prints to stderr after processing, so the error stream has its own end marker;
+        // without it a write's "Error:" could arrive after {ready} and be blamed on the next command.
+        cmd += "\n-echo4\n\(ExifTool.errSentinel)\n-execute\n"
         do { try stdin.write(contentsOf: cmd.data(using: .utf8)!) }
         catch { process = nil; AppLog.error("exiftool write failed: \(error.localizedDescription)"); return Result(output: "", error: "exiftool is not responding: \(error.localizedDescription)") }
 
@@ -81,7 +86,21 @@ final class ExifTool {
             }
         }
         var err = ""
-        errLock.lock(); let d = errBuffer; errBuffer = Data(); errLock.unlock()
+        // Wait (bounded) until stderr has delivered this command's sentinel.
+        let marker = ExifTool.errSentinel.data(using: .utf8)!
+        let deadline = Date().addingTimeInterval(2)
+        var d = Data()
+        while true {
+            errLock.lock()
+            if let r = errBuffer.range(of: marker) {
+                d = errBuffer.subdata(in: 0 ..< r.lowerBound)
+                errBuffer.removeSubrange(0 ..< min(errBuffer.count, r.upperBound + 1))   // drop the newline after it
+                errLock.unlock(); break
+            }
+            errLock.unlock()
+            if Date() > deadline || process?.isRunning == false { errLock.lock(); d = errBuffer; errBuffer = Data(); errLock.unlock(); break }
+            _ = errReady.wait(timeout: .now() + 0.05)
+        }
         if !d.isEmpty {
             // In -stay_open mode the "N image files updated" summaries land on stderr too;
             // only real diagnostics count as errors.

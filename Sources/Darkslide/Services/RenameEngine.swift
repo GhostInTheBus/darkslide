@@ -44,7 +44,8 @@ enum RenameEngine {
                 // An empty name would resolve to the parent folder itself; never move anything there.
                 let dest = newBase.isEmpty ? file : file.deletingLastPathComponent().appendingPathComponent(newBase).appendingPathExtension(file.pathExtension)
                 let key = dest.path.lowercased()
-                let exists = FileManager.default.fileExists(atPath: dest.path) && dest.path != file.path
+                // APFS is case-insensitive: img_0001.cr3 → IMG_0001.cr3 "exists" but is the file itself.
+                let exists = FileManager.default.fileExists(atPath: dest.path) && dest.path.lowercased() != file.path.lowercased()
                 let collision = newBase.isEmpty || exists || seen.contains(key)
                 seen.insert(key)
                 entries.append(RenamePlan.Entry(from: file, to: dest, collision: collision))
@@ -57,6 +58,9 @@ enum RenameEngine {
     static func sanitize(_ s: String) -> String {
         var out = s
         for c in ["/", ":", "\\", "?", "*", "\"", "<", ">", "|"] { out = out.replacingOccurrences(of: c, with: "-") }
+        out = out.trimmingCharacters(in: .whitespaces)
+        // A leading dot would make a hidden file that the folder scan and companion lookup never see.
+        while out.hasPrefix(".") { out.removeFirst() }
         return out.trimmingCharacters(in: .whitespaces)
     }
 
@@ -69,9 +73,10 @@ enum RenameEngine {
         var failed: [(URL, String)] = []
         let fm = FileManager.default
         for e in plan.entries where !e.collision && e.from != e.to {
+            let caseOnly = e.from.path.lowercased() == e.to.path.lowercased()
             do {
                 guard !e.to.deletingPathExtension().lastPathComponent.isEmpty, e.to.deletingLastPathComponent() == e.from.deletingLastPathComponent() else { failed.append((e.from, "empty name")); continue }
-                if fm.fileExists(atPath: e.to.path) { failed.append((e.from, "exists")); continue }
+                if !caseOnly, fm.fileExists(atPath: e.to.path) { failed.append((e.from, "exists")); continue }
                 try fm.moveItem(at: e.from, to: e.to)
                 moved.append((e.from, e.to))
             } catch { failed.append((e.from, error.localizedDescription)) }

@@ -56,7 +56,7 @@ final class MetadataStore {
 
     /// Write IPTC fields through MWG so XMP, IPTC and EXIF stay in step (the legacy app writes all).
     func writeFields(_ fields: [String: String], appendKeywords: Bool, appendCaption: Bool, to files: [URL], completion: @escaping (ExifTool.Result) -> Void) {
-        var args = ["-overwrite_original", "-ignoreMinorErrors", "-use", "MWG"]
+        var args = ["-overwrite_original_in_place", "-ignoreMinorErrors", "-use", "MWG", "-IPTC:CodedCharacterSet=UTF8"]
         let map: [String: String] = [
             "caption": "MWG:Description", "headline": "IPTC:Headline", "byline": "MWG:Creator", "credit": "IPTC:Credit",
             "copyright": "MWG:Copyright", "source": "IPTC:Source", "city": "MWG:City", "state": "MWG:State",
@@ -75,8 +75,12 @@ final class MetadataStore {
                 if !appendKeywords { args.append("-MWG:Keywords="); args.append("-IPTC:Keywords=") }
                 for k in kws { args.append("-MWG:Keywords+=\(k)"); args.append("-IPTC:Keywords+=\(k)") }
             } else if key == "caption" && appendCaption {
-                args.append("-MWG:Description<${MWG:Description} \(value)")
-                args.append("-IPTC:Caption-Abstract<${MWG:Description} \(value)")
+                // The < form interpolates $tag, so a literal "$5" must be "$$5"; -f keeps the write
+                // when the file has no caption yet (the string would otherwise be skipped entirely).
+                let lit = value.replacingOccurrences(of: "$", with: "$$")
+                args.append("-f")
+                args.append("-MWG:Description<${MWG:Description} \(lit)")
+                args.append("-IPTC:Caption-Abstract<${MWG:Description} \(lit)")
             } else if let tag = map[key] {
                 args.append("-\(tag)=\(value)")
                 if let legacy = iptc[key] { args.append("-\(legacy)=\(value)") }
@@ -91,11 +95,11 @@ final class MetadataStore {
     /// Soft rotation: write the EXIF Orientation tag (what the legacy app does unless you ask for
     /// lossless pixel rotation). Every reader honours it.
     func setOrientation(_ o: Int, files: [URL], completion: @escaping (ExifTool.Result) -> Void) {
-        ExifTool.shared.runAsync(["-overwrite_original", "-ignoreMinorErrors", "-Orientation#=\(o)"] + files.map(\.path), completion: completion)
+        ExifTool.shared.runAsync(["-overwrite_original_in_place", "-ignoreMinorErrors", "-Orientation#=\(o)"] + files.map(\.path), completion: completion)
     }
 
     func writeGPS(latitude: Double?, longitude: Double?, files: [URL], completion: @escaping (ExifTool.Result) -> Void) {
-        var args = ["-overwrite_original", "-ignoreMinorErrors"]
+        var args = ["-overwrite_original_in_place", "-ignoreMinorErrors"]
         if let lat = latitude, let lon = longitude {
             args += ["-GPSLatitude=\(abs(lat))", "-GPSLatitudeRef=\(lat < 0 ? "S" : "N")", "-GPSLongitude=\(abs(lon))", "-GPSLongitudeRef=\(lon < 0 ? "W" : "E")",
                      "-XMP:GPSLatitude=\(lat)", "-XMP:GPSLongitude=\(lon)"]
@@ -106,7 +110,7 @@ final class MetadataStore {
     }
 
     func deleteMetadata(xmp: Bool, iptc: Bool, exif: Bool, gps: Bool, keepOrientation: Bool, files: [URL], completion: @escaping (ExifTool.Result) -> Void) {
-        var args = ["-overwrite_original", "-ignoreMinorErrors"]
+        var args = ["-overwrite_original_in_place", "-ignoreMinorErrors"]
         if xmp { args.append("-XMP:all=") }
         if iptc { args.append("-IPTC:all=") }
         if exif { args.append("-EXIF:all="); if keepOrientation { args += ["-tagsFromFile", "@", "-EXIF:Orientation"] } }
@@ -116,7 +120,7 @@ final class MetadataStore {
 
     /// Crop as Adobe crs fractions; nil removes the crop.
     func writeCrop(_ c: CropRect?, files: [URL], completion: @escaping (ExifTool.Result) -> Void) {
-        var args = ["-overwrite_original", "-ignoreMinorErrors"]
+        var args = ["-overwrite_original_in_place", "-ignoreMinorErrors"]
         if let c, c.hasCrop {
             args += ["-XMP-crs:HasCrop=True", "-XMP-crs:CropLeft=\(c.left)", "-XMP-crs:CropTop=\(c.top)", "-XMP-crs:CropRight=\(c.right)", "-XMP-crs:CropBottom=\(c.bottom)", "-XMP-crs:CropAngle=0"]
         } else {
@@ -126,7 +130,7 @@ final class MetadataStore {
     }
 
     func setDPI(_ dpi: Int, files: [URL], completion: @escaping (ExifTool.Result) -> Void) {
-        ExifTool.shared.runAsync(["-overwrite_original", "-ignoreMinorErrors", "-XResolution=\(dpi)", "-YResolution=\(dpi)", "-ResolutionUnit=inches"] + files.map(\.path), completion: completion)
+        ExifTool.shared.runAsync(["-overwrite_original_in_place", "-ignoreMinorErrors", "-XResolution=\(dpi)", "-YResolution=\(dpi)", "-ResolutionUnit=inches"] + files.map(\.path), completion: completion)
     }
 
     /// Clear chosen caption fields (legacy app: Clear IPTC Fields).
@@ -138,14 +142,14 @@ final class MetadataStore {
             "country": ["MWG:Country", "IPTC:Country-PrimaryLocationName"], "location": ["MWG:Location", "IPTC:Sub-location"],
             "event": ["XMP-iptcExt:Event"], "keywords": ["MWG:Keywords", "IPTC:Keywords"], "instructions": ["IPTC:SpecialInstructions", "XMP-photoshop:Instructions"],
         ]
-        var args = ["-overwrite_original", "-ignoreMinorErrors", "-use", "MWG"]
+        var args = ["-overwrite_original_in_place", "-ignoreMinorErrors", "-use", "MWG", "-IPTC:CodedCharacterSet=UTF8"]
         for k in keys { for t in tags[k] ?? [] { args.append("-\(t)=") } }
         ExifTool.shared.runAsync(args + files.map(\.path), completion: completion)
     }
 
     /// Copy IPTC/XMP descriptive metadata (not EXIF camera data) from one file to another.
     func copyMetadata(from: URL, to: URL, completion: @escaping (ExifTool.Result) -> Void) {
-        let args = ["-overwrite_original", "-ignoreMinorErrors", "-tagsFromFile", from.path,
+        let args = ["-overwrite_original_in_place", "-ignoreMinorErrors", "-tagsFromFile", from.path,
                     "-IPTC:all", "-XMP-dc:all", "-XMP-photoshop:all", "-XMP-iptcCore:all", "-XMP-iptcExt:all",
                     "-XMP-xmpRights:all", "-XMP-xmp:Rating", "-XMP-xmp:Label", "-XMP-photomech:all", "-XMP-lr:all", to.path]
         ExifTool.shared.runAsync(args, completion: completion)
@@ -156,7 +160,7 @@ final class MetadataStore {
         let sign = seconds < 0 ? "-=" : "+="
         let s = abs(seconds)
         let shift = String(format: "0:0:%d %d:%d:%d", s / 86400, (s % 86400) / 3600, (s % 3600) / 60, s % 60)
-        var args = ["-overwrite_original", "-ignoreMinorErrors", "-AllDates\(sign)\(shift)", "-XMP-photoshop:DateCreated\(sign)\(shift)", "-IPTC:DateCreated\(sign)\(shift)", "-IPTC:TimeCreated\(sign)\(shift)"]
+        var args = ["-overwrite_original_in_place", "-ignoreMinorErrors", "-AllDates\(sign)\(shift)", "-XMP-photoshop:DateCreated\(sign)\(shift)", "-IPTC:DateCreated\(sign)\(shift)", "-IPTC:TimeCreated\(sign)\(shift)"]
         args += files.map(\.path)
         ExifTool.shared.runAsync(args, completion: completion)
     }
@@ -164,7 +168,7 @@ final class MetadataStore {
     /// Write rating / class / tag the way the legacy app does: xmp:Rating, photomechanic:ColorClass,
     /// photomechanic:Tagged, photomechanic:Prefs, IPTC Prefs, plus xmp:Label for Adobe.
     func writeCull(_ meta: PhotoMeta, label: String, to files: [URL], completion: @escaping (ExifTool.Result) -> Void) {
-        var args = ["-overwrite_original", "-ignoreMinorErrors"]
+        var args = ["-overwrite_original_in_place", "-ignoreMinorErrors"]
         args.append("-XMP-xmp:Rating=\(meta.rating)")
         args.append("-XMP-photomech:ColorClass=\(meta.colorClass)")
         args.append("-XMP-photomech:Tagged#=\(meta.tagged ? "True" : "False")")

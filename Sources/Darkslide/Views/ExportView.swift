@@ -57,7 +57,13 @@ struct ExportView: View {
         running = true; total = library.targets.count; done = 0
         library.settings.lastExportFolder = folder; library.saveSettings()
         let user = UserInfo.load()
-        let wm: ((PhotoItem) -> String)? = p.watermarkText.isEmpty ? nil : { item in var ctx = library.variableContext(); ctx.item = item; ctx.meta = library.meta[item.url]; ctx.info = library.info(for: item); return Variables.expand(p.watermarkText, ctx) }
+        // Resolve watermark text here on the main thread; the engine runs on a background queue
+        // and `library.info(for:)` mutates published state.
+        var texts: [URL: String] = [:]
+        if !p.watermarkText.isEmpty {
+            for item in library.targets { var ctx = library.variableContext(); ctx.item = item; ctx.meta = library.meta[item.url]; ctx.info = library.info(for: item); texts[item.url] = Variables.expand(p.watermarkText, ctx) }
+        }
+        let wm: ((PhotoItem) -> String)? = p.watermarkText.isEmpty ? nil : { item in texts[item.url] ?? "" }
         ExportEngine.export(items: library.targets, preset: p, to: URL(fileURLWithPath: folder), meta: library.meta,
                             copyright: user.name.isEmpty ? "" : "© \(Calendar.current.component(.year, from: Date())) \(user.name)", creator: user.name, watermark: wm,
                             progress: { d, t in done = d; total = t }) { r in

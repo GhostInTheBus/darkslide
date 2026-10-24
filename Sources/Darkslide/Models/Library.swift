@@ -167,8 +167,15 @@ final class Library: ObservableObject {
         alert.informativeText = "RAW+JPEG pairs and sidecars go together. You can put them back from the Trash."
         alert.addButton(withTitle: "Move to Trash"); alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
+        var errors: [String] = []
         for item in ts {
-            for f in RenameEngine.companions(of: item) { try? FileManager.default.trashItem(at: f, resultingItemURL: nil) }
+            for f in RenameEngine.companions(of: item) {
+                do { try FileManager.default.trashItem(at: f, resultingItemURL: nil) }
+                catch { errors.append("\(f.lastPathComponent): \(error.localizedDescription)") }   // network shares without a .Trashes
+            }
+        }
+        if !errors.isEmpty {
+            lastError = "Could not move to Trash: " + errors.prefix(3).joined(separator: "; ") + (errors.count > 3 ? " (+\(errors.count - 3) more)" : "")
         }
         selection = []
         rescan()
@@ -292,7 +299,8 @@ final class Library: ObservableObject {
 
     /// Items a cull/caption action applies to: the selection, or the current item.
     var targets: [PhotoItem] {
-        let sel = items.filter { selection.contains($0.id) }
+        // Only visible items: after a filter hides a just-rated photo it must stop taking keystrokes.
+        let sel = visible.filter { selection.contains($0.id) }
         if !sel.isEmpty { return sel }
         return current.map { [$0] } ?? []
     }
@@ -646,8 +654,10 @@ final class Library: ObservableObject {
             MetadataStore.shared.writeCull(m, label: label, to: files) { [weak self] r in
                 guard let self else { return }
                 if !r.ok {
+                    // Re-read rather than restore `before`: a later write may have succeeded meanwhile.
+                    let fresh = MetadataStore.shared.reload([item.url])[item.url] ?? before
                     DispatchQueue.main.async {
-                        self.meta[item.url] = before
+                        self.meta[item.url] = fresh
                         self.lastError = "Write failed for \(item.displayName): \(r.error)"
                     }
                 }
